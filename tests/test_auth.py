@@ -1,0 +1,286 @@
+import sqlite3
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app import config, deps
+from app.database import SCHEMA
+from app.main import app
+from app.services import auth_service as auth
+
+PW = "correct horse"
+
+
+@pytest.fixture
+def conn():
+    c = sqlite3.connect(":memory:", check_same_thread=False)
+    c.row_factory = sqlite3.Row
+    c.executescript(SCHEMA)
+    auth._fails.clear()
+    return c
+
+
+# ---------- service ----------
+def test_password_hash_is_salted_and_verifies():
+    a, b = auth.hash_password(PW), auth.hash_password(PW)
+    assert a != b and PW not in a
+    assert auth.verify_password(PW, a) and not auth.verify_password("wrong password", a)
+    assert not auth.verify_password(PW, "garbage")
+
+
+def test_token_roundtrip_tamper_and_expiry(monkeypatch):
+    monkeypatch.setattr(config, "SESSION_SECRET", "s1")
+    t = auth.make_token(7, epoch=3)
+    assert auth.read_token(t) == (7, 3)
+    body, sig = t.split(".")
+    assert auth.read_token(body + "." + sig[:-2] + "xx") is None
+    assert auth.read_token("nope") is None and auth.read_token(None) is None
+    assert auth.read_token(auth.make_token(7, hours=-1)) is None
+    monkeypatch.setattr(config, "SESSION_SECRET", "other")          # a different secret cannot read it
+    assert auth.read_token(t) is None
+
+
+def test_create_user_rules(conn):
+    u = auth.create_user(conn, "  Ann@X.com ", PW, "Ann", "recruiter")
+    assert u["email"] == "ann@x.com" and "password_hash" not in u
+    with pytest.raises(auth.AuthError, match="already exists"):
+        auth.create_user(conn, "ANN@x.com", PW)
+    with pytest.raises(auth.AuthError, match="at least 8"):
+        auth.create_user(conn, "b@x.com", "short")
+    with pytest.raises(auth.AuthError, match="valid email"):
+        auth.create_user(conn, "not-an-email", PW)
+    with pytest.raises(auth.AuthError, match="Role"):
+        auth.create_user(conn, "c@x.com", PW, role="boss")
+
+
+def test_authenticate_generic_error_and_inactive(conn):
+    auth.create_user(conn, "a@x.com", PW)
+    assert auth.authenticate(conn, "A@x.com", PW)["email"] == "a@x.com"
+    for email, pw in (("a@x.com", "bad password"), ("ghost@x.com", PW)):
+        with pytest.raises(auth.AuthError) as e:
+            auth.authenticate(conn, email, pw)
+        assert str(e.value) == "Invalid email or password."         # same message: no hint which part was wrong
+    auth.update_user(conn, 1, is_active=False)
+    with pytest.raises(auth.AuthError, match="Invalid"):
+        auth.authenticate(conn, "a@x.com", PW)
+
+
+def test_lockout_after_repeated_failures_then_expires(conn, monkeypatch):
+    auth.create_user(conn, "a@x.com", PW)
+    for _ in range(auth.MAX_FAILS):
+        with pytest.raises(auth.AuthError, match="Invalid"):
+            auth.authenticate(conn, "a@x.com", "bad password")
+    with pytest.raises(auth.AuthError, match="Too many"):
+        auth.authenticate(conn, "a@x.com", PW)                     # even the right password is refused while locked
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + auth.LOCK_SECONDS + 1)
+    assert auth.authenticate(conn, "a@x.com", PW)
+
+
+def test_last_admin_is_protected(conn):
+    admin = auth.create_user(conn, "a@x.com", PW, role="admin")
+    for bad in (dict(role="recruiter"), dict(is_active=False)):
+        with pytest.raises(auth.AuthError, match="at least one active admin"):
+            auth.update_user(conn, admin["id"], **bad)
+    with pytest.raises(auth.AuthError, match="at least one active admin"):
+        auth.delete_user(conn, admin["id"])
+    second = auth.create_user(conn, "b@x.com", PW, role="admin")
+    auth.update_user(conn, admin["id"], role="recruiter")           # fine now: another admin exists
+    assert auth.get_user(conn, admin["id"])["role"] == "recruiter"
+    with pytest.raises(auth.AuthError, match="at least one active admin"):
+        auth.delete_user(conn, second["id"])                        # second is now the only admin
+
+
+def test_bootstrap_admin(conn, monkeypatch):
+    monkeypatch.setattr(config, "AUTH_ENABLED", False)
+    auth.bootstrap_admin(conn)
+    assert auth.list_users(conn) == []
+    monkeypatch.setattr(config, "AUTH_ENABLED", True)
+    monkeypatch.setattr(config, "ADMIN_EMAIL", "boss@x.com")
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", PW)
+    auth.bootstrap_admin(conn)
+    auth.bootstrap_admin(conn)                                      # idempotent
+    users = auth.list_users(conn)
+    assert len(users) == 1 and users[0]["role"] == "admin"
+
+
+# ---------- API ----------
+@pytest.fixture
+def api(conn, monkeypatch):
+    monkeypatch.setattr(config, "AUTH_ENABLED", True)
+    monkeypatch.setattr(config, "SESSION_SECRET", "test-secret")
+    monkeypatch.setattr(config, "ADMIN_EMAIL", "")                  # startup must never create an admin in the real database
+    auth.create_user(conn, "admin@x.com", PW, "Admin", "admin")
+    auth.create_user(conn, "rec@x.com", PW, "Rec", "recruiter")
+    app.dependency_overrides[deps.get_db] = lambda: conn
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+def login(client, email, pw=PW):
+    return client.post("/api/auth/login", json={"email": email, "password": pw})
+
+
+def test_protected_routes_need_login(api):
+    for path in ("/api/jobs", "/api/db", "/api/auth/me", "/api/users"):
+        assert api.get(path).status_code == 401
+    assert api.get("/api/health").status_code == 200
+    assert api.get("/api/auth/status").json() == {"auth_enabled": True, "registration_open": True}
+
+
+def test_login_logout_flow_and_cookie_flags(api):
+    r = login(api, "rec@x.com")
+    assert r.status_code == 200 and r.json()["user"]["role"] == "recruiter" and "password_hash" not in r.text
+    cookie = r.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "samesite=lax" in cookie
+    assert api.get("/api/auth/me").json()["user"]["email"] == "rec@x.com"
+    assert api.get("/api/jobs").status_code == 200
+    api.post("/api/auth/logout")
+    assert api.get("/api/jobs").status_code == 401
+
+
+def test_bad_login_and_forged_cookie(api):
+    assert login(api, "rec@x.com", "wrong password").status_code == 401
+    api.cookies.set("session", "1.forged")
+    assert api.get("/api/jobs").status_code == 401
+
+
+def test_recruiter_cannot_manage_users_admin_can(api):
+    login(api, "rec@x.com")
+    assert api.get("/api/users").status_code == 403
+    assert api.post("/api/users", json={"email": "n@x.com", "password": PW}).status_code == 403
+    api.post("/api/auth/logout")
+    login(api, "admin@x.com")
+    listed = api.get("/api/users").json()
+    assert {u["email"] for u in listed} == {"admin@x.com", "rec@x.com"} and all("password_hash" not in u for u in listed)
+    made = api.post("/api/users", json={"email": "n@x.com", "password": PW, "role": "recruiter"})
+    assert made.status_code == 201
+    assert api.post("/api/users", json={"email": "n@x.com", "password": PW}).status_code == 422
+    assert api.patch(f"/api/users/{made.json()['id']}", json={"role": "admin"}).json()["role"] == "admin"
+
+
+def test_admin_cannot_lock_self_out(api):
+    me = login(api, "admin@x.com").json()["user"]
+    assert api.patch(f"/api/users/{me['id']}", json={"is_active": False}).status_code == 422
+    assert api.patch(f"/api/users/{me['id']}", json={"role": "recruiter"}).status_code == 422
+    assert api.delete(f"/api/users/{me['id']}").status_code == 422
+    assert api.patch("/api/users/999", json={"role": "admin"}).status_code == 404
+
+
+def test_deactivating_a_user_ends_their_session_immediately(api):
+    rec = TestClient(app)
+    login(rec, "rec@x.com")
+    assert rec.get("/api/jobs").status_code == 200
+    login(api, "admin@x.com")
+    rec_id = next(u["id"] for u in api.get("/api/users").json() if u["email"] == "rec@x.com")
+    api.patch(f"/api/users/{rec_id}", json={"is_active": False})
+    assert rec.get("/api/jobs").status_code == 401
+
+
+def test_change_own_password(api):
+    login(api, "rec@x.com")
+    assert api.post("/api/auth/password", json={"current_password": "nope nope", "new_password": "brand new pw"}).status_code == 401
+    assert api.post("/api/auth/password", json={"current_password": PW, "new_password": "short"}).status_code == 422
+    assert api.post("/api/auth/password", json={"current_password": PW, "new_password": "brand new pw"}).status_code == 200
+    api.post("/api/auth/logout")
+    assert login(api, "rec@x.com").status_code == 401
+    assert login(api, "rec@x.com", "brand new pw").status_code == 200
+
+
+def test_users_table_is_not_in_database_viewer(api):
+    login(api, "admin@x.com")
+    assert "users" not in api.get("/api/db").json()
+    assert api.get("/api/db/users").status_code == 404
+
+
+def test_auth_off_means_no_login_needed(conn, monkeypatch):
+    monkeypatch.setattr(config, "AUTH_ENABLED", False)
+    app.dependency_overrides[deps.get_db] = lambda: conn
+    with TestClient(app) as c:
+        assert c.get("/api/jobs").status_code == 200
+        assert c.get("/api/auth/me").json()["user"]["role"] == "admin"
+        assert c.get("/api/auth/status").json() == {"auth_enabled": False, "registration_open": False}
+    app.dependency_overrides.clear()
+
+
+# ---------- self registration ----------
+def test_register_creates_recruiter_and_signs_in(api):
+    r = api.post("/api/auth/register", json={"name": "New Person", "email": "New@X.com", "password": "brand new pw"})
+    assert r.status_code == 201 and r.json()["user"]["role"] == "recruiter" and r.json()["user"]["email"] == "new@x.com"
+    assert "httponly" in r.headers["set-cookie"].lower()
+    assert api.get("/api/jobs").status_code == 200                      # signed in straight away
+    assert api.get("/api/users").status_code == 403                     # but not an admin
+
+
+def test_register_cannot_pick_a_role_and_rejects_bad_input(api):
+    r = api.post("/api/auth/register", json={"email": "sneaky@x.com", "password": "brand new pw", "role": "admin"})
+    assert r.status_code == 201 and r.json()["user"]["role"] == "recruiter"   # role in the request is ignored
+    assert api.post("/api/auth/register", json={"email": "sneaky@x.com", "password": "brand new pw"}).status_code == 422   # duplicate
+    assert api.post("/api/auth/register", json={"email": "b@x.com", "password": "short"}).status_code == 422
+    assert api.post("/api/auth/register", json={"email": "nope", "password": "brand new pw"}).status_code == 422
+
+
+def test_registration_can_be_closed(api, monkeypatch):
+    monkeypatch.setattr(config, "ALLOW_REGISTRATION", False)
+    assert api.get("/api/auth/status").json()["registration_open"] is False
+    assert api.post("/api/auth/register", json={"email": "c@x.com", "password": "brand new pw"}).status_code == 403
+
+
+def test_registration_is_throttled_per_address(api):
+    auth._signups.clear()
+    codes = [api.post("/api/auth/register", json={"email": f"u{i}@x.com", "password": "brand new pw"}).status_code
+             for i in range(auth.MAX_SIGNUPS + 1)]
+    assert codes[:-1] == [201] * auth.MAX_SIGNUPS and codes[-1] == 429
+    auth._signups.clear()
+
+
+# ---------- session revocation (found by the QA suite: an old cookie still worked after logout) ----------
+def test_logout_revokes_a_copied_cookie(api):
+    r = login(api, "rec@x.com")
+    saved = api.cookies.get("session")
+    assert api.get("/api/jobs").status_code == 200
+    api.post("/api/auth/logout")
+    thief = TestClient(app)
+    thief.cookies.set("session", saved)
+    assert thief.get("/api/jobs").status_code == 401
+
+
+def test_password_change_signs_out_other_sessions_but_not_this_one(api):
+    other = TestClient(app)
+    login(other, "rec@x.com")
+    login(api, "rec@x.com")
+    assert api.post("/api/auth/password", json={"current_password": PW, "new_password": "brand new pw"}).status_code == 200
+    assert api.get("/api/jobs").status_code == 200          # this browser got a fresh cookie
+    assert other.get("/api/jobs").status_code == 401        # the other session was ended
+
+
+def test_admin_password_reset_signs_the_user_out(api):
+    rec = TestClient(app)
+    login(rec, "rec@x.com")
+    login(api, "admin@x.com")
+    rid = next(u["id"] for u in api.get("/api/users").json() if u["email"] == "rec@x.com")
+    api.patch(f"/api/users/{rid}", json={"password": "reset by admin"})
+    assert rec.get("/api/jobs").status_code == 401
+
+
+def test_security_headers_on_every_response(api):
+    for path in ("/api/health", "/api/jobs", "/"):
+        h = api.get(path).headers
+        assert h["x-content-type-options"] == "nosniff" and h["x-frame-options"] == "DENY"
+        assert "frame-ancestors 'none'" in h["content-security-policy"]
+
+
+def test_old_database_without_session_epoch_is_upgraded(tmp_path, monkeypatch):
+    import app.database as dbm
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL DEFAULT '', "
+                "password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'recruiter', is_active INTEGER NOT NULL DEFAULT 1, "
+                "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_login_at TEXT)")
+    old.commit(); old.close()
+    monkeypatch.setattr(dbm, "DATABASE_PATH", path)
+    dbm.init_db()
+    cols = {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(users)")}
+    assert "session_epoch" in cols

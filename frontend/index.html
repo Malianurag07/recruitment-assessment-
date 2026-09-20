@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shortlist · AI recruitment assistant</title>
+  <meta name="description" content="Pick a job, upload a stack of resumes, get a ranked and explained shortlist, and ask questions in plain language.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Cpath d=%27M10 1v18M1 10h18M3.6 3.6l12.8 12.8M16.4 3.6L3.6 16.4%27 stroke=%27%23c471ed%27 stroke-width=%271.8%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ============ Header ============ -->
+<header class="sticky top-0 z-30 border-b" style="border-color:var(--line);background:rgba(10,8,16,.82);backdrop-filter:blur(10px)">
+  <div class="mx-auto flex max-w-7xl items-center gap-4 px-5 py-3.5">
+    <a href="#/" class="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1v18M1 10h18M3.6 3.6l12.8 12.8M16.4 3.6L3.6 16.4" stroke="url(#g)" stroke-width="1.8" stroke-linecap="round"/><defs><linearGradient id="g" x1="0" y1="0" x2="20" y2="20"><stop stop-color="#c471ed"/><stop offset="1" stop-color="#f0506e"/></linearGradient></defs></svg>
+      Shortlist
+    </a>
+    <nav class="ml-6 hidden items-center gap-6 text-sm md:flex" style="color:var(--muted)" aria-label="Main">
+      <a class="hover:text-white" href="#/jobs">Jobs</a>
+      <a class="hover:text-white" id="navResults" href="#/jobs">Results</a>
+    </nav>
+    <div class="ml-auto flex items-center gap-2.5">
+      <div id="userMenu" class="flex items-center gap-2" hidden></div>
+      <a id="jobPill" href="#/jobs" class="mono hidden max-w-[240px] truncate rounded-full border px-3 py-1.5 text-[12px] sm:inline-block" style="border-color:var(--line-strong);color:var(--muted)"></a>
+      <a href="#/jobs" id="startBtn" class="btn btn-primary btn-sm">Start screening</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ================================================================ LOGIN (only shown when AUTH_ENABLED=1) -->
+<section data-view="login" hidden class="relative overflow-hidden px-5 pb-24 pt-16 md:pt-24">
+  <div class="glow"></div>
+  <form id="loginForm" class="card card-tint relative mx-auto w-full max-w-sm p-7" autocomplete="on" novalidate>
+    <span class="eyebrow" id="loginEyebrow">Sign in</span>
+    <h1 class="h-display mt-4 text-[28px]" id="loginTitle">Welcome <b>back</b></h1>
+    <p class="mt-2 text-sm" id="loginSub" style="color:var(--muted)">Sign in to screen resumes and rank candidates.</p>
+    <div id="nameRow" hidden>
+      <label class="mono mt-6 block text-[11px] uppercase tracking-widest" style="color:var(--faint)" for="loginName">Name</label>
+      <input id="loginName" class="field mt-1.5" type="text" autocomplete="name" maxlength="100">
+    </div>
+    <label class="mono mt-6 block text-[11px] uppercase tracking-widest" style="color:var(--faint)" for="loginEmail">Email</label>
+    <input id="loginEmail" class="field mt-1.5" type="email" autocomplete="username" required maxlength="200">
+    <label class="mono mt-4 block text-[11px] uppercase tracking-widest" style="color:var(--faint)" for="loginPassword">Password</label>
+    <input id="loginPassword" class="field mt-1.5" type="password" autocomplete="current-password" required maxlength="200">
+    <p id="loginError" class="mt-3 hidden text-sm" style="color:var(--bad)" role="alert"></p>
+    <button id="loginBtn" class="btn btn-primary mt-6 w-full" type="submit">Sign in</button>
+    <p id="modeRow" class="mt-4 text-center text-sm" style="color:var(--muted)" hidden><span id="modeText">New here?</span>
+      <button id="modeBtn" type="button" class="underline" style="color:var(--cream)">Create an account</button></p>
+  </form>
+</section>
+
+<!-- ================================================================ USERS (admins only) -->
+<section data-view="users" hidden class="mx-auto max-w-5xl px-5 pb-24 pt-10">
+  <span class="eyebrow">Administration</span>
+  <h1 class="h-display mt-3 text-[30px] md:text-[38px]">Users <b>&amp; roles</b></h1>
+  <p class="mt-2 max-w-xl text-sm" style="color:var(--muted)"><b>Admins</b> manage users and can do everything. <b>Recruiters</b> screen resumes, view rankings, chat and export.</p>
+  <form id="newUserForm" class="card mt-7 grid gap-3 p-5 md:grid-cols-[1.2fr_1.2fr_1fr_.8fr_auto]" novalidate>
+    <input id="nuName" class="field" placeholder="Name" maxlength="100" aria-label="Name">
+    <input id="nuEmail" class="field" type="email" placeholder="Email" maxlength="200" required aria-label="Email">
+    <input id="nuPassword" class="field" type="password" placeholder="Password (8+ characters)" maxlength="200" required autocomplete="new-password" aria-label="Password">
+    <select id="nuRole" class="field" aria-label="Role"><option value="recruiter">Recruiter</option><option value="admin">Admin</option></select>
+    <button class="btn btn-primary" type="submit">Add user</button>
+  </form>
+  <div class="card mt-5 overflow-x-auto"><table class="rank-table" aria-label="Users"><thead><tr>
+    <th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div>
+</section>
+
+<!-- ================================================================ HOME -->
+<section data-view="home">
+  <div class="relative overflow-hidden px-5 pb-20 pt-20 text-center md:pt-28">
+    <div class="glow"></div>
+    <div class="relative mx-auto max-w-3xl">
+      <span class="eyebrow">AI recruitment assistant</span>
+      <h1 class="h-display mt-6 text-[40px] md:text-[64px]">Read every resume.<br><b>Shortlist with reasons.</b></h1>
+      <p class="mx-auto mt-6 max-w-xl text-[17px]" style="color:var(--muted)">
+        Choose a job, drop in a stack of resumes, and get a ranked shortlist where every score can be explained. Then just ask questions about your candidates.
+      </p>
+      <div class="mt-9 flex flex-wrap justify-center gap-3">
+        <a href="#/jobs" class="btn btn-primary">Start screening →</a>
+        <a href="#/jobs" id="homeLatest" class="btn btn-ghost">Open latest results</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-6xl px-5 pb-24 reveal">
+    <div class="text-center">
+      <span class="eyebrow">The pipeline</span>
+      <h2 class="h-display mt-4 text-[30px] md:text-[40px]">Six steps. <b>One continuous chain.</b></h2>
+      <p class="mx-auto mt-3 max-w-lg" style="color:var(--muted)">Each step hands the next a finished, checked result. Nothing is re-keyed by hand.</p>
+    </div>
+    <div class="mt-10 grid grid-cols-2 gap-3 md:grid-cols-6">
+      <div class="step" style="background:rgba(196,113,237,.12)"><span class="n" style="color:#c471ed">01</span><h3>Upload</h3><p>PDF or Word resumes, plus the job</p></div>
+      <div class="step" style="background:rgba(208,100,200,.11)"><span class="n" style="color:#d264c8">02</span><h3>Extract</h3><p>Text to structured facts</p></div>
+      <div class="step" style="background:rgba(220,90,170,.10)"><span class="n" style="color:#dc5aaa">03</span><h3>Verify</h3><p>A second AI checks the first</p></div>
+      <div class="step" style="background:rgba(230,84,140,.10)"><span class="n" style="color:#e6548c">04</span><h3>Score</h3><p>Skills, experience, fit</p></div>
+      <div class="step" style="background:rgba(238,80,120,.10)"><span class="n" style="color:#ee5078">05</span><h3>Store</h3><p>One clean record per person</p></div>
+      <div class="step" style="background:rgba(240,80,110,.12)"><span class="n" style="color:#f0506e">06</span><h3>Ask</h3><p>Plain-language questions</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ STEP 1: JOB -->
+<section data-view="jobs" hidden class="mx-auto max-w-6xl px-5 pb-24 pt-10">
+  <div data-stepper></div>
+  <span class="eyebrow mt-10">Step 1 · The job</span>
+  <h2 class="h-display mt-4 text-[30px] md:text-[44px]">Which job are you <b>screening for?</b></h2>
+  <p class="mt-3 max-w-xl" style="color:var(--muted)">Pick a job you added earlier, or add a new one. Each job keeps its own ranking.</p>
+
+  <div class="mt-10 grid gap-5 lg:grid-cols-[1.1fr_1fr]">
+    <div>
+      <div class="mono mb-3 text-[11px] uppercase tracking-[.18em]" style="color:var(--faint)">Your jobs</div>
+      <div id="jobGrid" class="grid gap-3"></div>
+    </div>
+    <div class="card p-6 self-start">
+      <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Add a new job</h3><span class="mono text-[11px]" style="color:var(--faint)">PDF · DOCX · TXT · paste</span></div>
+      <textarea id="jdText" rows="7" class="field mt-4 resize-y" placeholder="Paste the job description here…"></textarea>
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <label class="btn btn-ghost btn-sm cursor-pointer">Choose a file<input id="jdFile" type="file" accept=".pdf,.docx,.txt" class="hidden"></label>
+        <span id="jdFileName" class="mono text-xs" style="color:var(--muted)"></span>
+        <button id="createJobBtn" class="btn btn-primary ml-auto">Analyse job</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ STEP 2: RESUMES -->
+<section data-view="upload" hidden class="mx-auto max-w-4xl px-5 pb-24 pt-10">
+  <div data-stepper></div>
+  <span class="eyebrow mt-10">Step 2 · The resumes</span>
+  <h2 class="h-display mt-4 text-[30px] md:text-[44px]">Upload <b>as many as you like.</b></h2>
+
+  <div id="uploadJob" class="card mt-8 p-5"></div>
+
+  <div class="card mt-5 p-6">
+    <div id="dropzone" class="drop flex flex-col items-center justify-center px-6 py-12 text-center" tabindex="0" role="button" aria-label="Upload resumes">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--violet)"><path d="M12 16V4m0 0L7 9m5-5l5 5M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p class="mt-3 text-[17px] font-medium">Drop resumes here, or click to browse</p>
+      <p class="mono mt-1 text-xs" style="color:var(--muted)">PDF or DOCX · several at once · up to 10 MB each</p>
+      <input id="resumeInput" type="file" multiple accept=".pdf,.docx" class="hidden">
+    </div>
+    <ul id="uploadList" class="mt-4 space-y-2"></ul>
+    <div id="uploadDone" class="mt-5 hidden items-center justify-between gap-4 rounded-2xl border p-4" style="border-color:rgba(95,208,138,.25);background:rgba(95,208,138,.06)">
+      <div><div class="font-medium" id="uploadDoneTitle"></div><div class="text-[13px]" style="color:var(--muted)">Opening the ranking…</div></div>
+      <a id="toResults" class="btn btn-primary" href="#/results">See ranking &amp; ask questions →</a>
+    </div>
+    <div class="mt-5 flex justify-between text-sm"><a href="#/jobs" class="btn btn-ghost btn-sm">← Change job</a><a id="skipToResults" href="#/results" class="btn btn-ghost btn-sm hidden">Skip to ranking →</a></div>
+  </div>
+</section>
+
+<!-- ================================================================ STEP 3: RESULTS + CHAT -->
+<section data-view="results" hidden class="mx-auto max-w-7xl px-5 pb-24 pt-10">
+  <div data-stepper></div>
+  <div class="mt-10 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <span class="eyebrow">Step 3 · Ranking &amp; questions</span>
+      <h2 class="h-display mt-4 text-[28px] md:text-[40px]" id="resultsTitle">Ranking</h2>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a id="addMore" class="btn btn-ghost btn-sm" href="#/jobs">+ Add resumes</a>
+      <a class="btn btn-ghost btn-sm" href="#/jobs">Change job</a>
+      <a id="exportBtn" class="btn btn-ghost btn-sm" href="#">Export CSV</a>
+      <a id="exportXlsx" class="btn btn-ghost btn-sm" href="#">Export Excel</a>
+    </div>
+  </div>
+
+  <div id="heroStats" class="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div class="card px-5 py-4"><div class="text-[28px] font-semibold tracking-tight" id="statScored">–</div><div class="text-[12.5px]" style="color:var(--muted)">Candidates scored</div></div>
+    <div class="card px-5 py-4"><div class="text-[28px] font-semibold tracking-tight" id="statShort">–</div><div class="text-[12.5px]" style="color:var(--muted)">Shortlisted</div></div>
+    <div class="card px-5 py-4"><div class="text-[28px] font-semibold tracking-tight" id="statAvg">–</div><div class="text-[12.5px]" style="color:var(--muted)">Average match score</div></div>
+    <div class="card px-5 py-4"><div class="text-[28px] font-semibold tracking-tight" id="statReq">–</div><div class="text-[12.5px]" style="color:var(--muted)">Required skills</div></div>
+  </div>
+
+  <div class="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+    <!-- Ranking -->
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div id="filters" class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by recommendation"></div>
+        <button id="compareBtn" class="btn btn-ghost btn-sm" type="button" disabled title="Tick 2 or 3 candidates in the table">Compare (0)</button>
+      </div>
+      <div id="alerts" class="mt-4 space-y-3"></div>
+      <div class="card mt-4 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="rank-table">
+            <thead><tr>
+              <th style="width:44px"><span class="sr-only">Select to compare</span></th><th style="width:52px">#</th><th>Candidate</th><th style="min-width:190px">Match score</th>
+              <th class="hide-sm">Required</th><th class="hide-sm">Experience</th>
+            </tr></thead>
+            <tbody id="rankBody"></tbody>
+          </table>
+        </div>
+        <div id="rankEmpty" class="hidden px-6 py-14 text-center" style="color:var(--muted)"></div>
+      </div>
+      <p class="mono mt-3 text-[11px]" style="color:var(--faint)">Score = 50% skills · 20% experience · 15% projects &amp; education · 15% overall fit. Click a row for the full breakdown.</p>
+    </div>
+
+    <!-- Chat -->
+    <div class="card flex min-w-0 flex-col overflow-hidden xl:sticky xl:top-20" style="height:min(78vh,760px)">
+      <div class="flex items-center justify-between border-b px-5 py-3.5" style="border-color:var(--line)">
+        <div><div class="eyebrow">Ask about these candidates</div></div>
+        <button class="btn btn-ghost btn-sm" id="clearChat" type="button" title="Clear conversation">Clear</button>
+      </div>
+      <div id="chatLog" class="scroll-y flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"></div>
+      <div id="suggestions" class="scroll-y flex max-h-[112px] flex-wrap gap-1.5 overflow-y-auto border-t px-4 py-3" style="border-color:var(--line)"></div>
+      <form id="chatForm" class="flex gap-2 border-t p-3" style="border-color:var(--line)">
+        <label class="sr-only" for="chatInput">Your question</label>
+        <input id="chatInput" class="field" autocomplete="off" placeholder="e.g. Which candidates are missing Docker?" maxlength="1000">
+        <button class="btn btn-primary" id="chatSend" type="submit">Ask</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Data -->
+  <div class="mt-16">
+    <span class="eyebrow">What was stored</span>
+    <h3 class="h-display mt-3 text-[24px] md:text-[30px]">Every result is saved <b>in the database.</b></h3>
+    <p class="mt-2 max-w-xl text-sm" style="color:var(--muted)">Read-only view of the SQLite tables behind this page, including the log of automatic corrections.</p>
+    <div id="dbTabs" class="mt-5 flex flex-wrap gap-2"></div>
+    <div id="dbView" class="mt-4"></div>
+  </div>
+</section>
+</main>
+
+<footer class="border-t px-5 py-8 text-center text-[13px]" style="border-color:var(--line);color:var(--faint)">
+  <span class="mono" id="footMode">Shortlist · FastAPI · SQLite · Groq &amp; Gemini</span>
+</footer>
+
+<!-- ============ Drawer + modal + toast ============ -->
+<div id="scrim" class="scrim"></div>
+<aside id="drawer" class="drawer" aria-hidden="true" aria-label="Candidate details"></aside>
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Choose which resume to keep">
+  <div class="card p-6" id="modalBody"></div>
+</div>
+<div id="toast" class="toast" role="status"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

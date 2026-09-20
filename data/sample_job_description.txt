@@ -1,0 +1,22 @@
+Job Title: AI/ML Engineer (Entry Level)
+
+About the role
+We are building AI-powered products and are looking for an AI/ML Engineer to join our team. You will
+develop machine learning models, expose them through APIs, and help deploy them to production.
+
+Requirements
+- Strong Python programming skills
+- Hands-on experience with Machine Learning and Deep Learning
+- Experience with TensorFlow or PyTorch
+- Experience building REST APIs with FastAPI or Flask
+- Working knowledge of SQL databases
+- Familiarity with Docker and Git
+- Experience with Large Language Models (LLMs) and RAG
+
+Nice to have
+- Experience with cloud platforms (AWS)
+- Knowledge of vector databases
+- Computer vision experience (OpenCV)
+
+Experience: 0-2 years. Freshers with strong projects or internships are welcome.
+We value clear communication and teamwork.
