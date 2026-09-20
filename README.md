@@ -65,14 +65,14 @@ flowchart TD
         P6 --> P7[("SQLite<br/>candidates, applications, skills, scores,<br/>verification log, chat history, users")]
     end
 
-    API --> Pipeline
+    API --> P1
     API -->|question| Chat["Query engine"]
     subgraph ChatFlow["Chat (query_engine)"]
         direction TB
         C1["Plan: AI picks tools as JSON"] --> C2["Execute: 12 fixed, parameterised tools<br/>(SQL, plus hybrid search: keywords + embeddings)"]
         C2 --> C3["Answer: Gemini, using ONLY tool results"]
     end
-    Chat --> ChatFlow
+    Chat --> C1
     C2 <--> P7
 
     LLM["AI providers<br/>Groq + Gemini (cloud)<br/>or Ollama (LLM_MODE=local)"]
