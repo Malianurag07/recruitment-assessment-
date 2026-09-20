@@ -52,27 +52,32 @@ and **zero cost**.
 
 ```mermaid
 flowchart TD
-    UI["Web UI (HTML + Tailwind + JS)"] -->|JSON over HTTP| API["FastAPI routes<br/>upload / analysis / query"]
+    UI["Web UI (HTML + Tailwind + JS)<br/>ranking, chat, compare, export, login, users page"] -->|JSON over HTTP + session cookie| SEC["Security layer<br/>security headers, optional login,<br/>admin / recruiter roles"]
+    SEC --> API["FastAPI routes<br/>auth / users / upload / analysis + export / query"]
 
     subgraph Pipeline["Resume pipeline (candidate_service.process_resume)"]
         direction TB
-        P1["1. Text extraction<br/>PyMuPDF / python-docx"] --> P2["2. AI extraction<br/>Groq qwen3.8-27b -> validated JSON"]
+        P1["1. Text extraction<br/>PyMuPDF / python-docx<br/>invisible text dropped, link targets kept"] --> P2["2. AI extraction<br/>Groq qwen3.8-27b -> validated JSON"]
         P2 --> P3["3. Double verification<br/>free code checks + Gemini second opinion<br/>(corrections need a verbatim quote)"]
         P3 --> P4["4. Skill normalisation<br/>alias table + AI for unknown skills"]
         P4 --> P5["5. Duplicate check<br/>same email/phone, per job"]
         P5 --> P6["6. Scoring<br/>skills + experience in code,<br/>fit judged by AI (median of 3)"]
-        P6 --> P7[("SQLite")]
+        P6 --> P7[("SQLite<br/>candidates, applications, skills, scores,<br/>verification log, chat history, users")]
     end
 
     API --> Pipeline
     API -->|question| Chat["Query engine"]
     subgraph ChatFlow["Chat (query_engine)"]
         direction TB
-        C1["Plan: AI picks tools as JSON"] --> C2["Execute: 12 fixed, parameterised tools<br/>(SQL, plus hybrid search)"]
+        C1["Plan: AI picks tools as JSON"] --> C2["Execute: 12 fixed, parameterised tools<br/>(SQL, plus hybrid search: keywords + embeddings)"]
         C2 --> C3["Answer: Gemini, using ONLY tool results"]
     end
     Chat --> ChatFlow
     C2 <--> P7
+
+    LLM["AI providers<br/>Groq + Gemini (cloud)<br/>or Ollama (LLM_MODE=local)"]
+    Pipeline -.-> LLM
+    ChatFlow -.-> LLM
 ```
 
 **Key design decisions**
@@ -82,6 +87,8 @@ flowchart TD
 | **SQL-first retrieval, AI only for reasoning.** The chat picks from 12 fixed Python functions; it never writes SQL. | Prevents hallucination over data it wasn't given, and removes SQL-injection risk. |
 | **Two different AI models check each other.** Groq extracts, Gemini verifies. | A model reviewing its own output tends to repeat its own mistakes. |
 | **A correction is applied only if its evidence quote exists in the resume.** | The verifier cannot invent fixes. Every change is logged. |
+| **A changed number must be justified by its own quote** (for example, years of experience must match the stated years or date ranges). | Found in testing: the verifier once turned 3 real years into 1 using a genuine quote. A real quote proves the text exists, not that the conclusion is right. |
+| **Text a human cannot see is ignored and logged** (white-on-white, microscopic, transparent). | Found in testing: invisible keyword stuffing raised a weak candidate's score from 31 to 86. |
 | **Skills and experience scores are computed in code.** The AI only judges soft parts (projects, fit) and is handed the computed facts. | Repeatable, testable, and "matches 9 of 10 skills" is always literally true. |
 | **A person is separate from their applications.** | One person can apply to several jobs with different resumes. |
 | **Every ranking is scoped to one job.** | A match score means nothing without knowing which job it is relative to. |
