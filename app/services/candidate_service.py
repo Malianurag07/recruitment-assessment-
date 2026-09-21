@@ -53,7 +53,7 @@ def _kw(llm):
 
 
 # ---------------------------------------------------------------- jobs
-def create_job(conn: sqlite3.Connection, text: str, canon_llm=None, jd_llm=None) -> tuple[int | None, str]:
+def create_job(conn: sqlite3.Connection, text: str, canon_llm=None, jd_llm=None, owner_id: int | None = None) -> tuple[int | None, str]:
     """Parse a job description and store it. Returns (job_id, message); job_id is None on failure."""
     res = extract_job(text, **_kw(jd_llm))
     if res.status != "ok":
@@ -64,8 +64,8 @@ def create_job(conn: sqlite3.Connection, text: str, canon_llm=None, jd_llm=None)
     with conn:
         save_learned(conn, learned)
         cur = conn.execute(
-            "INSERT INTO job_descriptions (title, raw_text, min_experience_years, soft_skills, summary) VALUES (?,?,?,?,?)",
-            (job.title, text, job.min_experience_years, json.dumps(job.soft_skills), job.summary))
+            "INSERT INTO job_descriptions (title, raw_text, min_experience_years, soft_skills, summary, owner_id) VALUES (?,?,?,?,?,?)",
+            (job.title, text, job.min_experience_years, json.dumps(job.soft_skills), job.summary, owner_id))
         job_id, seen = cur.lastrowid, set()
         for importance, skills in (("required", job.required_skills), ("preferred", job.preferred_skills)):
             for s in skills:
@@ -128,7 +128,7 @@ def process_resume(conn: sqlite3.Connection, data: bytes, filename: str, job_id:
         return Outcome(filename, "duplicate_ignored", "Identical resume already submitted for this job",
                        early.existing_application_id, early.candidate_id)
     scorable = early.kind != dedupe.CONFLICT and ext.status == "ok" and ver.status != "needs_review"
-    result = score_candidate(profile, job, aliases, **_kw(score_llm)) if scorable else None
+    result = score_candidate(profile, job, aliases, text=doc.text, **_kw(score_llm)) if scorable else None
 
     with _write_lock(conn):
         # Authoritative check under the write lock: another upload may have won the race while we were scoring.
@@ -238,7 +238,7 @@ def resolve_conflict(conn: sqlite3.Connection, keep_application_id: int, *, scor
     if not has_score and row["extraction_status"] == "ok" and row["verification_status"] != "needs_review":
         profile = CandidateProfile.model_validate_json(row["profile_json"])
         job = get_job(conn, row["job_description_id"])
-        result = score_candidate(profile, job, load_aliases(conn), **_kw(score_llm))
+        result = score_candidate(profile, job, load_aliases(conn), text=row["raw_text"] or "", **_kw(score_llm))
         with conn:
             _store_analysis(conn, keep_application_id, row["job_description_id"], result)
     score = conn.execute("SELECT match_score, recommendation FROM analysis_results WHERE application_id=?",
@@ -253,12 +253,12 @@ def rescore_unavailable(conn: sqlite3.Connection, job_id: int, *, score_llm=None
     job = get_job(conn, job_id)
     aliases = load_aliases(conn)
     rows = conn.execute(
-        """SELECT r.application_id, r.match_score, a.profile_json, c.name FROM analysis_results r
+        """SELECT r.application_id, r.match_score, a.profile_json, a.raw_text, c.name FROM analysis_results r
            JOIN applications a ON a.id = r.application_id JOIN candidates c ON c.id = a.candidate_id
            WHERE r.job_description_id = ? AND r.llm_status = 'unavailable'""", (job_id,)).fetchall()
     out = []
     for r in rows:
-        result = score_candidate(CandidateProfile.model_validate_json(r["profile_json"]), job, aliases, **_kw(score_llm))
+        result = score_candidate(CandidateProfile.model_validate_json(r["profile_json"]), job, aliases, text=r["raw_text"] or "", **_kw(score_llm))
         if result.llm_status == "ok":                      # only replace when the retry actually worked
             with conn:
                 _store_analysis(conn, r["application_id"], job_id, result)
@@ -271,14 +271,14 @@ def preview_pending_scores(conn: sqlite3.Connection, job_id: int, *, score_llm=N
     job = get_job(conn, job_id)
     aliases = load_aliases(conn)
     rows = conn.execute(
-        """SELECT a.id, a.resume_filename, a.profile_json, a.extraction_status, a.verification_status, c.name
+        """SELECT a.id, a.resume_filename, a.profile_json, a.raw_text, a.extraction_status, a.verification_status, c.name
            FROM applications a JOIN candidates c ON c.id = a.candidate_id
            WHERE a.job_description_id = ? AND a.application_status = 'pending_choice'""", (job_id,)).fetchall()
     out = []
     for r in rows:
         if r["extraction_status"] != "ok" or r["verification_status"] == "needs_review":
             continue
-        res = score_candidate(CandidateProfile.model_validate_json(r["profile_json"]), job, aliases, **_kw(score_llm))
+        res = score_candidate(CandidateProfile.model_validate_json(r["profile_json"]), job, aliases, text=r["raw_text"] or "", **_kw(score_llm))
         req = [b for b in res.skill_breakdown if b.importance == "required"]
         out.append({"application_id": r["id"], "name": r["name"], "file": r["resume_filename"], "score": res.match_score,
                     "recommendation": res.recommendation,

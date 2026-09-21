@@ -230,7 +230,7 @@ async function renderJobs() {
     const date = (j.created_at || "").slice(0, 10);
     return `<div class="job-card ${j.id === state.jobId ? "now" : ""}">
       <div class="min-w-0 flex-1"><div class="truncate text-[16px] font-semibold">${esc(j.title || "Untitled job")}</div>
-        <div class="mono mt-1 text-[11.5px]" style="color:var(--muted)">#${j.id} · ${j.scored} candidate${j.scored === 1 ? "" : "s"}${j.pending ? ` · ${j.pending} awaiting choice` : ""}${date ? ` · added ${esc(date)}` : ""}</div></div>
+        <div class="mono mt-1 text-[11.5px]" style="color:var(--muted)">#${j.id} · ${j.scored} candidate${j.scored === 1 ? "" : "s"}${j.pending ? ` · ${j.pending} awaiting choice` : ""}${date ? ` · added ${esc(date)}` : ""}${j.owner ? ` · by ${esc(j.owner)}` : ""}</div></div>
       ${j.scored ? `<a class="btn btn-ghost btn-sm" href="#/results/${j.id}">View ranking</a>` : ""}
       <a class="btn btn-primary btn-sm" href="#/upload/${j.id}">Screen resumes →</a></div>`;
   }).join("");
@@ -510,7 +510,7 @@ $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") clos
 
 // ---------------------------------------------------------------- candidate drawer
 const COMPONENTS = [["skills", "Skills match", "50%"], ["experience", "Experience", "20%"], ["projects_education", "Projects & education", "15%"], ["fit", "Overall fit", "15%"]];
-const STATUS_LABEL = { solid: "", working: "working", inferred: "inferred", basic: "basic", missing: "" };
+const STATUS_LABEL = { solid: "", working: "working", inferred: "inferred", semantic: "by meaning", basic: "basic", partial: "partial", missing: "" };
 
 function openDrawer(appId) {
   const c = state.cards.find((x) => x.application_id === appId); if (!c) return;
@@ -518,7 +518,7 @@ function openDrawer(appId) {
     const list = c.skills.filter((s) => s.colour === colour);
     if (!list.length) return "";
     return `<div class="mt-4"><div class="mono text-[10.5px] uppercase tracking-[.16em]" style="color:var(--faint)">${title} · ${list.length}</div>
-      <div class="mt-2 flex flex-wrap gap-1.5">${list.map((s) => `<span class="sk sk-${colour}" title="${s.importance}">${esc(s.skill)}${STATUS_LABEL[s.status] ? ` <small>${STATUS_LABEL[s.status]}</small>` : ""}${s.importance === "preferred" ? ` <small>bonus</small>` : ""}</span>`).join("")}</div></div>`;
+      <div class="mt-2 flex flex-wrap gap-1.5">${list.map((s) => `<span class="sk sk-${colour}" title="${esc(s.evidence ? `${s.importance} · resume says: “${s.evidence}”` : s.importance)}">${esc(s.skill)}${STATUS_LABEL[s.status] ? ` <small>${STATUS_LABEL[s.status]}</small>` : ""}${s.importance === "preferred" ? ` <small>bonus</small>` : ""}</span>`).join("")}</div></div>`;
   };
   const list = (items) => items.length ? `<ul class="mt-2 space-y-1.5 text-[14px]" style="color:#cfcbdb">${items.map((i) => `<li class="flex gap-2"><span style="color:var(--faint)">–</span><span>${esc(i)}</span></li>`).join("")}</ul>` : `<p class="mt-2 text-sm" style="color:var(--faint)">None found</p>`;
   const section = (title, inner) => `<div class="hairline mt-7 pt-6"><div class="mono text-[10.5px] uppercase tracking-[.18em]" style="color:var(--faint)">${title}</div>${inner}</div>`;
@@ -560,7 +560,7 @@ function openDrawer(appId) {
       return `<div><div class="flex justify-between text-[13px]"><span>${label} <span class="mono" style="color:var(--faint)">· weight ${w}</span></span><span class="mono">${fmt1(v)}</span></div><div class="bar mt-1.5"><i style="width:${Math.max(2, v)}%"></i></div></div>`;
     }).join("")}</div>`)}
 
-    ${section("Skills against this job", `${skillGroup("green", "Solid")}${skillGroup("yellow", "Working knowledge or inferred")}${skillGroup("orange", "Basic")}${skillGroup("red", "Missing")}
+    ${section("Skills against this job", `${skillGroup("green", "Solid")}${skillGroup("yellow", "Working, inferred or matched by meaning")}${skillGroup("orange", "Basic")}${skillGroup("red", "Missing")}
       <p class="mono mt-4 text-[11px]" style="color:var(--faint)">Inferred = implied by related tools on the resume (for example TensorFlow implies Machine Learning), not stated.</p>`)}
 
     ${section("Strengths", list(c.strengths))}${section("Gaps", list(c.weaknesses))}

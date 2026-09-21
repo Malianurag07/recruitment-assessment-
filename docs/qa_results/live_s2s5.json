@@ -1,0 +1,325 @@
+{
+ "suite": "live_s2s5",
+ "extra": {
+  "stage_profile": {
+   "1 text extraction": {
+    "mean_s": 0.01,
+    "max_s": 0.03,
+    "mean_ai_calls": 0,
+    "n": 12,
+    "share_of_total_pct": 0.0
+   },
+   "2 AI extraction": {
+    "mean_s": 1.45,
+    "max_s": 4.05,
+    "mean_ai_calls": 1,
+    "n": 12,
+    "share_of_total_pct": 6.4
+   },
+   "3 verification": {
+    "mean_s": 10.25,
+    "max_s": 68.4,
+    "mean_ai_calls": 1,
+    "n": 12,
+    "share_of_total_pct": 45.1
+   },
+   "4 skill normalisation": {
+    "mean_s": 0.36,
+    "max_s": 1.33,
+    "mean_ai_calls": 0.67,
+    "n": 12,
+    "share_of_total_pct": 1.6
+   },
+   "5 scoring": {
+    "mean_s": 10.62,
+    "max_s": 68.82,
+    "mean_ai_calls": 4,
+    "n": 12,
+    "share_of_total_pct": 46.7
+   },
+   "6 database write + dedupe": {
+    "mean_s": 0.04,
+    "max_s": 0.06,
+    "mean_ai_calls": 0,
+    "n": 12,
+    "share_of_total_pct": 0.2
+   },
+   "TOTAL": {
+    "mean_s": 22.73,
+    "max_s": 77.21,
+    "mean_ai_calls": 6.67,
+    "n": 12,
+    "share_of_total_pct": 100.0
+   }
+  },
+  "ranking": [
+   [
+    "Meenakshi",
+    86.5
+   ],
+   [
+    "Arjun",
+    85.8
+   ],
+   [
+    "Sneha",
+    71.8
+   ],
+   [
+    "Karthik",
+    50.4
+   ],
+   [
+    "Ayesha",
+    47.6
+   ],
+   [
+    "Vikram",
+    45.3
+   ],
+   [
+    "Pooja",
+    45.0
+   ],
+   [
+    "Nikhil",
+    44.1
+   ],
+   [
+    "Divya",
+    43.5
+   ],
+   [
+    "Imran",
+    32.4
+   ],
+   [
+    "Rohan",
+    31.2
+   ],
+   [
+    "Kavita",
+    21.5
+   ]
+  ],
+  "total_ai_calls": 82
+ },
+ "cases": [
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-01",
+   "title": "Arjun Mehta (pdf, 3y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=3.0(want 3+-1) recall=11/11 missed=[] ungrounded=[] extra=['faiss'] score=85.8 status=stored 10.9s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-02",
+   "title": "Sneha Kulkarni (docx, 0y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=0.0(want 0+-1) recall=9/9 missed=[] ungrounded=[] extra=[] score=71.8 status=stored 20.7s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-03",
+   "title": "Vikram Das (two, 2y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=2.0(want 2+-1) recall=6/6 missed=[] ungrounded=[] extra=[] score=45.3 status=stored 10.4s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-04",
+   "title": "Pooja Iyer (pdf, 1y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=1.0(want 1+-1) recall=7/7 missed=[] ungrounded=[] extra=[] score=45.0 status=stored 16.2s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-05",
+   "title": "Rohan Gupta (pdf, 2y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=2.0(want 2+-1) recall=5/5 missed=[] ungrounded=[] extra=[] score=31.2 status=stored 7.7s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-06",
+   "title": "Kavita Joshi (pdf, 5y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=5.0(want 5+-1) recall=3/3 missed=[] ungrounded=[] extra=[] score=21.5 status=stored 18.0s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-07",
+   "title": "Imran Sheikh (docx, 1y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=1.0(want 1+-1) recall=5/5 missed=[] ungrounded=[] extra=[] score=32.4 status=stored 10.3s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-08",
+   "title": "Divya Nair (two, 3y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=3.0(want 3+-1) recall=6/6 missed=[] ungrounded=[] extra=[] score=43.5 status=stored 8.2s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-09",
+   "title": "Karthik Rao (pdf, 0y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=0.0(want 0+-1) recall=6/6 missed=[] ungrounded=[] extra=[] score=50.4 status=stored 10.7s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-10",
+   "title": "Meenakshi Pillai (pdf, 8y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=8.7(want 8+-1) recall=12/12 missed=[] ungrounded=[] extra=[] score=86.5 status=stored 77.2s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-11",
+   "title": "Nikhil Verma (pdf, 1y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=1.0(want 1+-1) recall=5/5 missed=[] ungrounded=[] extra=['rest api'] score=44.1 status=stored 72.1s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S2 Extraction accuracy (live AI)",
+   "id": "S2-12",
+   "title": "Ayesha Khan (docx, 0y): identity, years, skills",
+   "expected": "identity exact, years exact, skill recall >= 80%, no ungrounded skill",
+   "actual": "name=True email=True phone=True years=0.0(want 0+-1) recall=7/7 missed=[] ungrounded=[] extra=[] score=47.6 status=stored 10.2s",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-01",
+   "title": "Arjun should rank above Vikram",
+   "expected": "score(C01) > score(C03)",
+   "actual": "Arjun 85.8 vs Vikram 45.3",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-02",
+   "title": "Sneha should rank above Vikram",
+   "expected": "score(C02) > score(C03)",
+   "actual": "Sneha 71.8 vs Vikram 45.3",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-03",
+   "title": "Arjun should rank above Rohan",
+   "expected": "score(C01) > score(C05)",
+   "actual": "Arjun 85.8 vs Rohan 31.2",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-04",
+   "title": "Arjun should rank above Kavita",
+   "expected": "score(C01) > score(C06)",
+   "actual": "Arjun 85.8 vs Kavita 21.5",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-05",
+   "title": "Karthik should rank above Rohan",
+   "expected": "score(C09) > score(C05)",
+   "actual": "Karthik 50.4 vs Rohan 31.2",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-06",
+   "title": "Vikram should rank above Kavita",
+   "expected": "score(C03) > score(C06)",
+   "actual": "Vikram 45.3 vs Kavita 21.5",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-07",
+   "title": "Ayesha should rank above Kavita",
+   "expected": "score(C12) > score(C06)",
+   "actual": "Ayesha 47.6 vs Kavita 21.5",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-08",
+   "title": "Sneha should rank above Rohan",
+   "expected": "score(C02) > score(C05)",
+   "actual": "Sneha 71.8 vs Rohan 31.2",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-09",
+   "title": "Meenakshi should rank above Kavita",
+   "expected": "score(C10) > score(C06)",
+   "actual": "Meenakshi 86.5 vs Kavita 21.5",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-10",
+   "title": "Karthik should rank above Imran",
+   "expected": "score(C09) > score(C07)",
+   "actual": "Karthik 50.4 vs Imran 32.4",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-11",
+   "title": "Divya should rank above Kavita",
+   "expected": "score(C08) > score(C06)",
+   "actual": "Divya 43.5 vs Kavita 21.5",
+   "passed": true,
+   "seconds": 0.0
+  },
+  {
+   "scenario": "S5 Ranking quality (live AI)",
+   "id": "S5-12",
+   "title": "Rohan should rank at or above Kavita",
+   "expected": "score(C05) >= score(C06)",
+   "actual": "Rohan 31.2 vs Kavita 21.5",
+   "passed": true,
+   "seconds": 0.0
+  }
+ ]
+}

@@ -284,3 +284,73 @@ def test_old_database_without_session_epoch_is_upgraded(tmp_path, monkeypatch):
     dbm.init_db()
     cols = {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(users)")}
     assert "session_epoch" in cols
+
+
+# ---------- accounts must not see each other's jobs (reported by the user during a manual test) ----------
+def _job_as(client, text=None):
+    from conftest import JD_TEXT
+    r = client.post("/api/jobs", data={"text": text or JD_TEXT})
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def test_each_recruiter_sees_only_their_own_jobs(api, conn):
+    from conftest import _judge, add_candidate
+    deps.JOB_LLMS.update(jd_llm=_judge, canon_llm=_judge)
+    try:
+        auth.create_user(conn, "rec2@x.com", PW, "Rec Two", "recruiter")
+        a, b, admin = TestClient(app), TestClient(app), TestClient(app)
+        login(a, "rec@x.com"); login(b, "rec2@x.com"); login(admin, "admin@x.com")
+        job = _job_as(a)
+        app_id = add_candidate(conn, job, "Jeevan Raj", "j@x.com", "9000000001", ["Python"], 0).application_id
+
+        assert [j["id"] for j in a.get("/api/jobs").json()] == [job]
+        assert b.get("/api/jobs").json() == []                                       # the other account sees nothing
+        listed = admin.get("/api/jobs").json()
+        assert [j["id"] for j in listed] == [job] and listed[0]["owner"] == "rec@x.com"      # admins see all, with the owner
+
+        # every route that takes a job id answers "not found" to the wrong account, and works for the owner
+        for method, path in [("get", f"/api/jobs/{job}"), ("get", f"/api/jobs/{job}/candidates"), ("get", f"/api/jobs/{job}/review"),
+                             ("post", f"/api/jobs/{job}/rescore"), ("get", f"/api/jobs/{job}/export.csv"), ("get", f"/api/jobs/{job}/export.xlsx"),
+                             ("get", f"/api/jobs/{job}/chat"), ("delete", f"/api/jobs/{job}/chat"), ("get", f"/api/jobs/{job}/conflicts")]:
+            assert getattr(b, method)(path).status_code == 404, ("leaked to another account", method, path)
+            assert getattr(a, method)(path).status_code == 200, ("owner locked out", method, path)
+            assert getattr(admin, method)(path).status_code == 200, ("admin locked out", method, path)
+        assert b.post(f"/api/jobs/{job}/chat", json={"question": "top"}).status_code == 404
+        assert b.post(f"/api/jobs/{job}/resumes", files=[("files", ("r.pdf", b"%PDF", "application/pdf"))]).status_code == 404
+        assert b.post("/api/conflicts/resolve", json={"keep_application_id": app_id}).status_code == 404      # by application id
+        assert a.post("/api/conflicts/resolve", json={"keep_application_id": app_id}).status_code == 200
+
+        # their own job stays separate
+        job_b = _job_as(b)
+        assert [j["id"] for j in b.get("/api/jobs").json()] == [job_b] and a.get(f"/api/jobs/{job_b}").status_code == 404
+    finally:
+        deps.JOB_LLMS.clear()
+
+
+def test_database_viewer_is_admin_only(api):
+    rec = TestClient(app); admin = TestClient(app)
+    login(rec, "rec@x.com"); login(admin, "admin@x.com")
+    assert rec.get("/api/db").status_code == 403 and rec.get("/api/db/candidates").status_code == 403
+    assert admin.get("/api/db").status_code == 200 and admin.get("/api/db/candidates").status_code == 200
+
+
+def test_jobs_made_before_owners_existed_are_admin_only(api, conn):
+    from conftest import JD_TEXT, _judge
+    from app.services import candidate_service as svc
+    old, _ = svc.create_job(conn, JD_TEXT, canon_llm=_judge, jd_llm=_judge)           # no owner: like a job made while login was off
+    rec = TestClient(app); admin = TestClient(app)
+    login(rec, "rec@x.com"); login(admin, "admin@x.com")
+    assert rec.get("/api/jobs").json() == [] and rec.get(f"/api/jobs/{old}").status_code == 404
+    assert admin.get(f"/api/jobs/{old}").status_code == 200
+
+
+def test_old_database_without_job_owner_is_upgraded(tmp_path, monkeypatch):
+    import app.database as dbm
+    path = tmp_path / "old2.db"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE job_descriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, raw_text TEXT NOT NULL)")
+    old.commit(); old.close()
+    monkeypatch.setattr(dbm, "DATABASE_PATH", path)
+    dbm.init_db()
+    assert "owner_id" in {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(job_descriptions)")}

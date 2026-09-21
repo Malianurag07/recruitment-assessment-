@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from app.config import JUDGE_SAMPLES
 from app.llm import client, prompts
+from app.llm.verification import quote_in_text
 from app.models import CandidateProfile, JobProfile, ScoreJudgment
 
 LLMFn = Callable[[str, str], str]
@@ -22,8 +23,9 @@ LLMFn = Callable[[str, str], str]
 WEIGHTS = {"skills": 0.50, "experience": 0.20, "projects_education": 0.15, "fit": 0.15}
 SHORTLIST_AT, CONSIDER_AT = 70, 45
 PREFERRED_WEIGHT = 0.5
-CREDIT = {"solid": 1.0, "working": 0.75, "inferred": 0.75, "basic": 0.5, "missing": 0.0}
-COLOUR = {"solid": "green", "working": "yellow", "inferred": "yellow", "basic": "orange", "missing": "red"}
+# "semantic" = the resume shows the requirement in different words (verified by a verbatim quote); "partial" = only adjacent experience.
+CREDIT = {"solid": 1.0, "working": 0.75, "inferred": 0.75, "semantic": 0.75, "basic": 0.5, "partial": 0.4, "missing": 0.0}
+COLOUR = {"solid": "green", "working": "yellow", "inferred": "yellow", "semantic": "yellow", "basic": "orange", "partial": "orange", "missing": "red"}
 
 # A resume rarely lists every umbrella term ("Machine Learning") even when it lists the tools that imply it.
 # Owning any listed tool earns partial credit ("inferred", yellow) for the umbrella skill.
@@ -44,8 +46,9 @@ DEFAULT_INTERNSHIP_MONTHS = 3
 class SkillResult:
     skill: str
     importance: str          # required | preferred
-    status: str              # solid | working | basic | missing
+    status: str              # solid | working | inferred | semantic | basic | partial | missing
     colour: str
+    evidence: str = ""      # verbatim resume quote for a 'semantic' or 'partial' match
 
 
 @dataclass
@@ -104,12 +107,43 @@ def skill_match(profile: CandidateProfile, job: JobProfile, aliases: dict[str, s
                 status = "missing"
             rows.append(SkillResult(s, importance, status, COLOUR[status]))
 
+    score, ratio = _score_rows(rows)
+    return score, ratio, rows
+
+
+def _score_rows(rows: list[SkillResult]) -> tuple[float, float]:
+    """(skills score 0-100, share of required skills matched). Recomputed after meaning-based matches are added."""
     total = sum(1.0 if r.importance == "required" else PREFERRED_WEIGHT for r in rows)
     earned = sum(CREDIT[r.status] * (1.0 if r.importance == "required" else PREFERRED_WEIGHT) for r in rows)
-    score = 100 * earned / total if total else 0.0
     required = [r for r in rows if r.importance == "required"]
-    ratio = sum(r.status != "missing" for r in required) / len(required) if required else 0.0
-    return score, ratio, rows
+    ratio = sum(r.status not in ("missing", "partial") for r in required) / len(required) if required else 0.0
+    return (100 * earned / total if total else 0.0), ratio
+
+
+def semantic_cover(text: str, requirements: list[str], llm: LLMFn) -> dict[str, tuple[str, str]]:
+    """Ask the AI which still-missing requirements the resume shows in other words. Returns {requirement: (strength, quote)}.
+
+    Same grounding rule as verification: a match counts only if its quote appears verbatim in the resume, so the AI can
+    point at evidence but cannot invent it. Any failure returns {} and the word-for-word result stands.
+    """
+    if not requirements or not text.strip():
+        return {}
+    user = prompts.SEMANTIC_USER.format(reqs="\n".join(f"- {r}" for r in requirements), text=text[:12000])
+    try:
+        data = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", llm(prompts.SEMANTIC_SYSTEM, user).strip()))
+        matches = data.get("matches", []) if isinstance(data, dict) else []
+    except (client.LLMError, ValueError):
+        return {}
+    wanted = {r.lower(): r for r in requirements}
+    out: dict[str, tuple[str, str]] = {}
+    for m in matches if isinstance(matches, list) else []:
+        if not isinstance(m, dict):
+            continue
+        req = wanted.get(str(m.get("requirement", "")).strip().lower())
+        quote, strength = str(m.get("evidence_quote") or "").strip(), m.get("strength")
+        if req and strength in ("direct", "partial") and quote_in_text(quote, text):
+            out[req] = (strength, quote[:200])
+    return out
 
 
 # ---------- experience (code) ----------
@@ -205,9 +239,20 @@ def judge_consensus(profile: CandidateProfile, job: JobProfile, facts: str, llm:
 
 
 def score_candidate(profile: CandidateProfile, job: JobProfile, aliases: dict[str, str] | None = None,
-                    llm: LLMFn = _default_llm, today: date | None = None) -> ScoreResult:
+                    llm: LLMFn = _default_llm, today: date | None = None, text: str = "") -> ScoreResult:
+    """`text` is the resume text. When given, requirements the word-for-word match missed get one grounded AI pass
+    (semantic_cover), so a resume that says the same thing in other words is not scored as missing it."""
     aliases = aliases or {}
     skills_score, ratio, rows = skill_match(profile, job, aliases)
+    still_missing = [r for r in rows if r.status == "missing"]
+    if text and still_missing:
+        found = semantic_cover(text, [r.skill for r in still_missing], llm)
+        for r in still_missing:
+            if r.skill in found:
+                strength, quote = found[r.skill]
+                r.status = "semantic" if strength == "direct" else "partial"
+                r.colour, r.evidence = COLOUR[r.status], quote
+        skills_score, ratio = _score_rows(rows)
     exp_score, eff_years = experience_score(profile, job, today)
     matching = [r.skill for r in rows if r.status != "missing"]
     missing = [r.skill for r in rows if r.status == "missing"]

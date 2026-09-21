@@ -16,15 +16,18 @@ VIEWABLE_TABLES = ("candidates", "job_descriptions", "job_required_skills", "app
                    "analysis_results", "verification_log", "skill_aliases", "chat_history")
 
 
-def list_jobs(conn: sqlite3.Connection) -> list[dict]:
+def list_jobs(conn: sqlite3.Connection, owner_id: int | None = None, include_owner: bool = False) -> list[dict]:
+    """owner_id limits the list to one user's jobs; None means every job (admins, or login switched off)."""
+    where, args = ("WHERE j.owner_id = ?", (owner_id,)) if owner_id is not None else ("", ())
     jobs = []
-    for r in conn.execute("SELECT id, title, created_at FROM job_descriptions ORDER BY id DESC"):
+    for r in conn.execute(f"""SELECT j.id, j.title, j.created_at, u.email AS owner FROM job_descriptions j
+                              LEFT JOIN users u ON u.id = j.owner_id {where} ORDER BY j.id DESC""", args):    # noqa: S608 (fixed text)
         counts = conn.execute(
             """SELECT SUM(application_status='active') AS active, SUM(application_status='pending_choice') AS pending
                FROM applications WHERE job_description_id=?""", (r["id"],)).fetchone()
         scored = conn.execute("SELECT COUNT(*) FROM analysis_results WHERE job_description_id=?", (r["id"],)).fetchone()[0]
         jobs.append({"id": r["id"], "title": r["title"], "created_at": r["created_at"], "scored": scored,
-                     "pending": counts["pending"] or 0})
+                     "pending": counts["pending"] or 0, **({"owner": r["owner"]} if include_owner else {})})
     return jobs
 
 

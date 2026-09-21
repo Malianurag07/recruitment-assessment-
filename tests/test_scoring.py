@@ -146,3 +146,82 @@ def test_deep_learning_is_not_an_alias_of_machine_learning_but_implies_it():
     _, _, rows = skill_match(cand(skills=["Deep Learning"]), job, SEED_ALIASES)
     by = {r.skill: r.status for r in rows}
     assert by["Deep Learning"] == "solid" and by["Machine Learning"] == "inferred"      # two separate skills
+
+
+# ---------- meaning-based matching (found by testing a pharma resume: 21 relevant skills scored 0% skills) ----------
+RESUME = ("Marcus Vance. Senior Medical Representative. Visit cardiologists to present and explain our drugs to doctors. "
+          "Submit Daily Call Reports every evening. B.Pharm, 2018. Grew prescriptions 18% in my territory. ") * 2
+PHARMA = JobProfile(title="Medical Representative", required_skills=["Physician Detailing", "Daily Call Reports", "Territory Management", "Nurse Engagement"],
+                    preferred_skills=["B.Pharm"])
+MARCUS = CandidateProfile(name="Marcus", email="m@x.com", skills=["Sales", "Prescription Growth"], experience_years=5)
+
+
+def judge_json():
+    return json.dumps({"fit_score": 70, "projects_education_score": 60, "strengths": [], "weaknesses": [], "summary": "s", "interview_questions": []})
+
+
+def sem_llm(matches):
+    def fn(system, user):
+        return json.dumps({"matches": matches}) if system.startswith("You match job requirements") else judge_json()
+    return fn
+
+
+def test_word_for_word_only_gives_zero_when_the_resume_uses_other_words():
+    r = score_candidate(MARCUS, PHARMA, AL, llm=sem_llm([]), text=RESUME)
+    assert r.components["skills"] == 0.0
+
+
+def test_grounded_meaning_matches_earn_credit_and_carry_their_evidence():
+    llm = sem_llm([{"requirement": "Physician Detailing", "strength": "direct", "evidence_quote": "present and explain our drugs to doctors"},
+                   {"requirement": "Daily Call Reports", "strength": "direct", "evidence_quote": "Submit Daily Call Reports every evening"},
+                   {"requirement": "Territory Management", "strength": "partial", "evidence_quote": "Grew prescriptions 18% in my territory"},
+                   {"requirement": "B.Pharm", "strength": "direct", "evidence_quote": "B.Pharm, 2018"}])
+    r = score_candidate(MARCUS, PHARMA, AL, llm=llm, text=RESUME)
+    by = {b.skill: b for b in r.skill_breakdown}
+    assert (by["Physician Detailing"].status, by["Physician Detailing"].colour) == ("semantic", "yellow")
+    assert by["Territory Management"].status == "partial" and by["Nurse Engagement"].status == "missing"
+    assert by["Daily Call Reports"].evidence == "Submit Daily Call Reports every evening"
+    assert r.components["skills"] > 40 and r.skill_match_ratio == 0.5           # 2 of 4 required count fully; partial does not
+
+
+def test_invented_or_unrequested_matches_are_rejected():
+    llm = sem_llm([{"requirement": "Physician Detailing", "strength": "direct", "evidence_quote": "won the national detailing award"},   # not in resume
+                   {"requirement": "Nurse Engagement", "strength": "direct", "evidence_quote": ""},                                   # no quote
+                   {"requirement": "Surgery", "strength": "direct", "evidence_quote": "Visit cardiologists"},                          # not asked for
+                   {"requirement": "Daily Call Reports", "strength": "expert", "evidence_quote": "Submit Daily Call Reports"}])         # bad strength
+    r = score_candidate(MARCUS, PHARMA, AL, llm=llm, text=RESUME)
+    assert all(b.status == "missing" for b in r.skill_breakdown) and r.components["skills"] == 0.0
+
+
+def test_semantic_step_failure_falls_back_to_word_matching():
+    def broken(system, user):
+        if system.startswith("You match job requirements"):
+            raise LLMError("rate limited")
+        return judge_json()
+    r = score_candidate(MARCUS, PHARMA, AL, llm=broken, text=RESUME)
+    assert r.llm_status == "ok" and r.components["skills"] == 0.0
+
+
+def test_no_resume_text_means_no_extra_ai_call():
+    seen = []
+    score_candidate(MARCUS, PHARMA, AL, llm=lambda s, u: (seen.append(s), judge_json())[1])
+    assert not any(x.startswith("You match job requirements") for x in seen)
+
+
+def test_only_still_missing_requirements_are_sent_to_the_semantic_step():
+    prompts_seen = []
+
+    def spy(system, user):
+        if system.startswith("You match job requirements"):
+            prompts_seen.append(user)
+            return json.dumps({"matches": []})
+        return judge_json()
+    profile = CandidateProfile(name="M", email="m@x.com", skills=["Daily Call Reports"], experience_years=1)
+    score_candidate(profile, PHARMA, AL, llm=spy, text=RESUME)
+    assert "Daily Call Reports" not in prompts_seen[0].split("RESUME TEXT")[0] and "Physician Detailing" in prompts_seen[0]
+
+
+def test_job_prompt_is_not_limited_to_technical_jobs():
+    from app.llm import prompts
+    assert "ANY kind of job" in prompts.JD_SYSTEM and "soft_skills" in prompts.JD_SYSTEM
+    assert "technical skills/tools" not in prompts.JD_SYSTEM

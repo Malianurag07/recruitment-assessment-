@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS candidates (
 );
 
 CREATE TABLE IF NOT EXISTS job_descriptions (
+    owner_id INTEGER,                            -- users.id of whoever created it; NULL for jobs made while login was off
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT,
     raw_text TEXT,
@@ -193,6 +194,8 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         if "session_epoch" not in {r[1] for r in conn.execute("PRAGMA table_info(users)")}:      # database created before sessions could be revoked
             conn.execute("ALTER TABLE users ADD COLUMN session_epoch INTEGER NOT NULL DEFAULT 0")
+        if "owner_id" not in {r[1] for r in conn.execute("PRAGMA table_info(job_descriptions)")}:     # database created before jobs had owners
+            conn.execute("ALTER TABLE job_descriptions ADD COLUMN owner_id INTEGER")
         conn.executemany(
             "INSERT OR IGNORE INTO skill_aliases (alias, canonical) VALUES (?, ?)",
             SEED_ALIASES.items(),

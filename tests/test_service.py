@@ -30,6 +30,8 @@ def fake_llm(system, user):
         return json.dumps({"name": "Test Person", "email": email, "phone": phone, "skills": skills, "experience_years": 0})
     if system.startswith("You audit"):
         return json.dumps({"corrections": []})
+    if system.startswith("You match job requirements"):
+        return json.dumps({"matches": []})
     if system.startswith("You normalize"):
         return json.dumps({"mapping": {"Postgres": "PostgreSQL"}})
     if system.startswith("You are a careful technical recruiter"):

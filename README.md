@@ -13,7 +13,7 @@ SQLite, open-source libraries).
 | **Backend** | Python, FastAPI, SQLite |
 | **Frontend** | HTML, Tailwind CSS (CDN), vanilla JavaScript. No build step |
 | **AI** | Groq (`qwen3.8-27b`, `gpt-oss-120b`) and Gemini (`gemini-3.1-flash-lite`); optional local Llama via Ollama |
-| **Tests** | 190 automated tests, no API keys needed to run them |
+| **Tests** | 214 automated tests, no API keys needed to run them |
 
 ## Contents
 
@@ -157,8 +157,10 @@ Full rubric: [`docs/SCORING.md`](docs/SCORING.md). Summary:
 
 - **Recommendation:** Shortlist at 70 or above, Consider at 45-69, Reject below 45.
 - **Inference:** a resume listing TensorFlow but never the phrase "Machine Learning" earns partial credit (yellow, "inferred").
+- **Meaning match:** a requirement the resume states in other words earns credit (yellow "by meaning", or orange "partial") only when the AI
+  supplies a quote that is verified to appear verbatim in the resume. This is what lets non-technical jobs (sales, healthcare) score fairly.
 - **Repeatability:** the AI parts are judged three times in parallel and the median is kept, rounded to the nearest 10. Measured on 5 candidates: mean run-to-run swing fell from 4.2 to 1.8 points (worst case 6.0). The other 70% of the score is exact.
-- **Colour badges:** green solid, yellow working/inferred, orange basic, red missing.
+- **Colour badges:** green solid, yellow working/inferred/by meaning, orange basic/partial, red missing.
 - **Soft skills** are stored separately and never inflate the technical match.
 - **Internships** never count as paid experience.
 
@@ -177,6 +179,12 @@ ALLOW_REGISTRATION=1                     # optional, default 1; set 0 so only ad
 **recruiter** and are signed in at once; the role cannot be chosen at sign-up, so nobody can register as an admin. Sign-ups
 are limited to 10 per hour per address. Because anyone who can reach the site can then read candidate data, set
 `ALLOW_REGISTRATION=0` for a real deployment and let admins add users.
+
+**Each account has its own private workspace.** A job belongs to whoever created it, and every job-related request (ranking,
+candidates, upload, chat, export) is checked against that owner. A recruiter never sees another account's jobs, and asking for
+one returns "not found" so its existence is not revealed. Admins can see and manage all jobs (the list shows who owns each) and are
+the only ones who can open the database viewer. Jobs created while login was off have no owner and are visible to admins only
+once login is switched on. Tested in `tests/test_auth.py` (every job route, as owner, other recruiter and admin).
 
 Two roles: **admin** (everything, plus the Users page to add users, change roles, disable, reset passwords, delete) and
 **recruiter** (screening, rankings, chat, export). Every `/api` route except health and login then answers 401 without a
@@ -248,7 +256,7 @@ shows exactly what was stored.
 Useful commands:
 
 ```bash
-python -m pytest tests -q                        # 190 tests, no API keys needed
+python -m pytest tests -q                        # 214 tests, no API keys needed
 python scripts/demo_pipeline.py                  # rebuild the database from data/sample_resumes (live AI, ~2 min)
 python scripts/match_jd.py data/job_descriptions/ai_ml_intern.txt   # add a job to the existing database
 python scripts/test_queries.py                   # 25 live chat questions
@@ -288,7 +296,7 @@ Sample data: `data/sample_resumes/` (7 real resumes shared with permission, 3 sy
 
 ## 11. Testing, performance and comparison with commercial tools
 
-- **190 automated tests** cover parsing (including hostile files), extraction and validation, verification, scoring, duplicates and the concurrency race, the query tools (with injection attempts), hybrid retrieval, exports (with spreadsheet-injection checks), the API, and resilience.
+- **214 automated tests** cover parsing (including hostile files), extraction and validation, verification, scoring, duplicates and the concurrency race, the query tools (with injection attempts), hybrid retrieval, exports (with spreadsheet-injection checks), the API, and resilience.
 - **Measured performance and accuracy** on this project's own data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 - **How this compares with commercial recruiting software**, on architecture and efficiency, and where it falls short: [`docs/COMPARISON.md`](docs/COMPARISON.md).
 - **How the prompts are engineered** (and the failures that shaped them): [`docs/PROMPTS.md`](docs/PROMPTS.md).
@@ -335,7 +343,7 @@ app/
   services/   candidate_service, dedupe, skill_normalizer, read_models
 frontend/     index.html, styles.css, app.js
 scripts/      demo_pipeline, match_jd, test_queries, benchmark
-tests/        190 tests (fake LLMs; no network)
+tests/        214 tests (fake LLMs; no network)
 docs/         SCORING.md, PROMPTS.md, BENCHMARK.md, COMPARISON.md
 data/         sample_resumes/, job_descriptions/, sample job description
 ```
