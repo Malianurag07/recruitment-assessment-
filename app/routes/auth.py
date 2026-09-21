@@ -67,9 +67,10 @@ def _fail(e: svc.AuthError, code: int = 422):
 
 
 @router.get("/auth/status")
-def status():
-    """Public: lets the UI know whether to show a login screen."""
-    return {"auth_enabled": config.AUTH_ENABLED, "registration_open": config.AUTH_ENABLED and config.ALLOW_REGISTRATION}
+def status(db: sqlite3.Connection = Depends(deps.get_db)):
+    """Public: lets the UI know whether to show a login screen and whether sign-up is open."""
+    open_ = config.AUTH_ENABLED and (config.ALLOW_REGISTRATION or not svc.has_users(db))
+    return {"auth_enabled": config.AUTH_ENABLED, "registration_open": open_}
 
 
 @router.post("/auth/login")
@@ -87,8 +88,8 @@ def login(body: Login, response: Response, db: sqlite3.Connection = Depends(deps
 
 @router.post("/auth/register", status_code=201)
 def register(body: Register, request: Request, response: Response, db: sqlite3.Connection = Depends(deps.get_db)):
-    """Anyone can create a recruiter account (when ALLOW_REGISTRATION is on) and is signed in straight away."""
-    if not (config.AUTH_ENABLED and config.ALLOW_REGISTRATION):
+    """Anyone can create an account (when ALLOW_REGISTRATION is on) and is signed in straight away: a recruiter, or the admin if this is the first account."""
+    if not (config.AUTH_ENABLED and (config.ALLOW_REGISTRATION or not svc.has_users(db))):
         raise HTTPException(403, "Registration is closed. Ask an admin to create your account.")
     try:
         user = svc.register(db, request.client.host if request.client else "?", body.email, body.password, body.name)

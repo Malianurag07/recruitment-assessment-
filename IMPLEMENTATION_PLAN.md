@@ -105,7 +105,7 @@ Every functional requirement, documentation item and submission item in the asse
 | Export to CSV or Excel | Done: both, Excel with coloured skill matrix; spreadsheet-injection safe |
 | Better prompt engineering | Done and documented in `docs/PROMPTS.md` |
 | Hybrid retrieval | Done: BM25 + embeddings, weighted fusion, measured on real resumes; degrades to keyword-only |
-| Authentication and user management | Built, optional (`AUTH_ENABLED=1`, off by default so the demo needs no login) |
+| Authentication and user management | Built and on by default (`AUTH_ENABLED=0` turns it off); first registered account becomes the admin |
 
 ## 8. Remaining work
 

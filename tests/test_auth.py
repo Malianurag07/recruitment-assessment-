@@ -354,3 +354,59 @@ def test_old_database_without_job_owner_is_upgraded(tmp_path, monkeypatch):
     monkeypatch.setattr(dbm, "DATABASE_PATH", path)
     dbm.init_db()
     assert "owner_id" in {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(job_descriptions)")}
+
+
+# ---------- login is on by default: the first account on a fresh install becomes the admin ----------
+def test_login_is_on_by_default_in_the_config_file():
+    import re
+    src = open(config.__file__, encoding="utf-8").read()
+    assert re.search(r'AUTH_ENABLED\s*=\s*os\.getenv\("AUTH_ENABLED",\s*"1"\)', src)
+
+
+def test_first_registered_account_is_the_admin_then_recruiters(conn, monkeypatch):
+    monkeypatch.setattr(config, "AUTH_ENABLED", True)
+    monkeypatch.setattr(config, "SESSION_SECRET", "test-secret")
+    monkeypatch.setattr(config, "ADMIN_EMAIL", "")
+    auth._signups.clear()
+    app.dependency_overrides[deps.get_db] = lambda: conn
+    try:
+        with TestClient(app) as c:
+            assert c.get("/api/auth/status").json() == {"auth_enabled": True, "registration_open": True}
+            first = c.post("/api/auth/register", json={"email": "first@x.com", "password": PW, "name": "First"})
+            assert first.status_code == 201 and first.json()["user"]["role"] == "admin"
+            assert c.get("/api/users").status_code == 200                               # and can manage users straight away
+            other = TestClient(app)
+            second = other.post("/api/auth/register", json={"email": "second@x.com", "password": PW, "role": "admin"})
+            assert second.json()["user"]["role"] == "recruiter"                          # everyone after that is a recruiter
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_first_account_can_register_even_when_registration_is_closed(conn, monkeypatch):
+    monkeypatch.setattr(config, "AUTH_ENABLED", True)
+    monkeypatch.setattr(config, "ALLOW_REGISTRATION", False)
+    monkeypatch.setattr(config, "SESSION_SECRET", "test-secret")
+    monkeypatch.setattr(config, "ADMIN_EMAIL", "")
+    auth._signups.clear()
+    app.dependency_overrides[deps.get_db] = lambda: conn
+    try:
+        with TestClient(app) as c:
+            assert c.get("/api/auth/status").json()["registration_open"] is True          # otherwise nobody could ever sign in
+            assert c.post("/api/auth/register", json={"email": "first@x.com", "password": PW}).status_code == 201
+            assert c.get("/api/auth/status").json()["registration_open"] is False         # closed once someone exists
+            assert TestClient(app).post("/api/auth/register", json={"email": "late@x.com", "password": PW}).status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_session_secret_is_generated_once_and_survives_restarts(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_SECRET", "")
+    monkeypatch.setattr(auth, "SECRET_FILE", tmp_path / "session_secret.txt")
+    monkeypatch.setattr(auth, "_secret_cache", [])
+    token = auth.make_token(5, epoch=2)
+    assert (tmp_path / "session_secret.txt").exists()
+    monkeypatch.setattr(auth, "_secret_cache", [])            # simulate a server restart: memory is empty, the file remains
+    assert auth.read_token(token) == (5, 2)                   # the same login still works
+    monkeypatch.setattr(auth, "_secret_cache", [])
+    (tmp_path / "session_secret.txt").write_text("y" * 64, encoding="utf-8")    # a different secret rejects old tokens
+    assert auth.read_token(token) is None

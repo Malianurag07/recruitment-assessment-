@@ -164,21 +164,20 @@ Full rubric: [`docs/SCORING.md`](docs/SCORING.md). Summary:
 - **Soft skills** are stored separately and never inflate the technical match.
 - **Internships** never count as paid experience.
 
-**Authentication (optional, off by default):** with the default settings there is no login and the app works as described
-everywhere else. To require sign-in, add to `.env` and restart:
+**Login is built in and on by default, on the same single link.** Open http://127.0.0.1:8000 and you get the login screen. On a fresh
+install there are no accounts yet, so click "Create an account": **the first account to register becomes the admin**, everyone after
+that is a recruiter. (To create the admin from `.env` instead, uncomment `ADMIN_EMAIL` and `ADMIN_PASSWORD`.) Optional settings in `.env`:
 
 ```
-AUTH_ENABLED=1
-SESSION_SECRET=<long random string>      # python -c "import secrets; print(secrets.token_hex(32))"
-ADMIN_EMAIL=you@example.com              # the first admin is created on startup when there are no users yet
-ADMIN_PASSWORD=<8+ characters>
-ALLOW_REGISTRATION=1                     # optional, default 1; set 0 so only admins can add users
+AUTH_ENABLED=1                           # default. Set 0 for a single-user setup with no login at all
+SESSION_SECRET=<long random string>      # python -c "import secrets; print(secrets.token_hex(32))"; if empty, everyone is signed out on restart
+ALLOW_REGISTRATION=1                     # default. Set 0 so only admins can add users (the very first account can always register)
 ```
 
 **New users can register themselves** from the login card ("Create an account": name, email, password). They become a
-**recruiter** and are signed in at once; the role cannot be chosen at sign-up, so nobody can register as an admin. Sign-ups
-are limited to 10 per hour per address. Because anyone who can reach the site can then read candidate data, set
-`ALLOW_REGISTRATION=0` for a real deployment and let admins add users.
+**recruiter** (except the very first account, see above) and are signed in at once; the role cannot be chosen at sign-up. Sign-ups
+are limited to 10 per hour per address. On a public deployment, register the admin yourself first (or set `ADMIN_EMAIL`/`ADMIN_PASSWORD`) so a stranger cannot claim it, and set
+`ALLOW_REGISTRATION=0` so admins add users.
 
 **Each account has its own private workspace.** A job belongs to whoever created it, and every job-related request (ranking,
 candidates, upload, chat, export) is checked against that owner. A recruiter never sees another account's jobs, and asking for
@@ -328,7 +327,7 @@ Sample data: `data/sample_resumes/` (7 real resumes shared with permission, 3 sy
 | Export to CSV or Excel | Both; the Excel file has a colour-coded skills matrix; formula injection from resumes is neutralised |
 | Better prompt engineering | Validated JSON with error-fed retries, evidence-quote verification, consensus scoring; see `docs/PROMPTS.md` |
 | Hybrid retrieval | BM25 + embeddings with weighted fusion over resume chunks (section 7) |
-| Authentication and user management | Optional (`AUTH_ENABLED=1`): login, two roles, admin Users page, hashed passwords, signed sessions (section 3) |
+| Authentication and user management | Built in, on by default (`AUTH_ENABLED=0` turns it off): login, two roles, admin Users page, hashed passwords, signed sessions (section 3) |
 
 
 ## Project structure

@@ -18,6 +18,7 @@ MIN_PASSWORD = 8
 _SCRYPT = (2 ** 14, 8, 1)                    # n, r, p: about 16 MB and 50 ms per hash
 MAX_FAILS, LOCK_SECONDS = 5, 300
 
+SECRET_FILE = config.BASE_DIR / "data" / "session_secret.txt"     # created on first run; git-ignored
 _secret_cache: list[bytes] = []
 _fails: dict[str, list[float]] = {}          # email -> timestamps of recent failed logins (in memory, per process)
 
@@ -62,8 +63,18 @@ def _secret() -> bytes:
     if config.SESSION_SECRET:
         return config.SESSION_SECRET.encode()
     if not _secret_cache:
-        _secret_cache.append(secrets.token_bytes(32))
-        print("WARNING: SESSION_SECRET is not set; using a random one. Everyone is logged out on restart.")
+        # No SESSION_SECRET in .env: make one once and keep it, so restarting the server does not sign everybody out.
+        try:
+            if SECRET_FILE.exists():
+                value = SECRET_FILE.read_text(encoding="utf-8").strip()
+            else:
+                value = secrets.token_hex(32)
+                SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+                SECRET_FILE.write_text(value, encoding="utf-8")
+            _secret_cache.append(value.encode() if len(value) >= 32 else secrets.token_bytes(32))
+        except OSError:                                    # read-only disk: fall back to a per-run secret
+            _secret_cache.append(secrets.token_bytes(32))
+            print("WARNING: could not save a session secret; everyone is signed out when the server restarts.")
     return _secret_cache[0]
 
 
@@ -206,14 +217,20 @@ def authenticate(conn, email: str, password: str) -> dict:
 
 
 def register(conn, client: str, email: str, password: str, name: str = "") -> dict:
-    """Self sign-up. Always a recruiter (never an admin), and throttled per client address to slow down bulk sign-ups."""
+    """Self sign-up. A recruiter, except the very first account on a fresh install, which becomes the admin (otherwise nobody could
+    manage users). The role is never chosen by the caller. Throttled per client address to slow down bulk sign-ups."""
     cutoff = time.time() - SIGNUP_WINDOW
     recent = _signups[client] = [t for t in _signups.get(client, []) if t > cutoff]
     if len(recent) >= MAX_SIGNUPS:
         raise AuthError("Too many sign-ups from this address. Try again later.")
-    user = create_user(conn, email, password, name, "recruiter")
+    first = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0        # nobody can sign in yet: the first account becomes the admin
+    user = create_user(conn, email, password, name, "admin" if first else "recruiter")
     recent.append(time.time())
     return user
+
+
+def has_users(conn) -> bool:
+    return conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0
 
 
 def bootstrap_admin(conn) -> None:
@@ -224,4 +241,4 @@ def bootstrap_admin(conn) -> None:
         create_user(conn, config.ADMIN_EMAIL, config.ADMIN_PASSWORD, "Admin", "admin")
         print(f"Created first admin: {config.ADMIN_EMAIL}")
     else:
-        print("AUTH_ENABLED is on but there are no users. Set ADMIN_EMAIL and ADMIN_PASSWORD in .env and restart.")
+        print("Login is on and there are no accounts yet: open the app and register; the first account becomes the admin.")

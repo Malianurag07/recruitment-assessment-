@@ -18,7 +18,9 @@ const barClass = (s) => (s >= 70 ? "good" : s >= 45 ? "warn" : "bad");
 const fmt1 = (n) => (n == null ? "–" : Number(n).toFixed(1));
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, opts);
+  let res;
+  try { res = await fetch(path, opts); }
+  catch { throw new Error("Cannot reach the server. Is it still running? Start it again and reload this page."); }   // was: "Failed to fetch"
   if (res.status === 401 && state.auth.enabled && !path.startsWith("/api/auth/login")) {   // session ended or never started
     state.auth.user = null; updateChrome(); location.hash = "#/login";
     throw new Error("Please sign in.");

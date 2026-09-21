@@ -4,6 +4,7 @@
 # local database (created automatically on first run)
 data/recruitment.db
 data/*.db
+data/session_secret.txt
 
 # python
 __pycache__/

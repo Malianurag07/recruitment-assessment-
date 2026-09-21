@@ -32,8 +32,8 @@ SEMANTIC_INDEXING = os.getenv("SEMANTIC_INDEXING", "1") not in ("0", "false", "F
 # How many AI judgments to take the median of when scoring (1 = fastest/cheapest, 3 = more repeatable)
 JUDGE_SAMPLES = int(os.getenv("JUDGE_SAMPLES", "1" if LLM_MODE == "local" else "3"))
 
-# Authentication (optional; off by default so the demo needs no login). See app/services/auth_service.py.
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "0") in ("1", "true", "True")
+# Authentication (on by default; set AUTH_ENABLED=0 for a single-user setup with no login). See app/services/auth_service.py.
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "1") in ("1", "true", "True")   # on by default: one link, login included
 SESSION_SECRET = os.getenv("SESSION_SECRET", "")            # signs login cookies; if empty a random one is made per run
 ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "1") not in ("0", "false", "False")   # self sign-up as recruiter
 SESSION_HOURS = int(os.getenv("SESSION_HOURS", "12"))

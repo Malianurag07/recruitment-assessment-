@@ -1,6 +1,7 @@
 """Shared fixtures: a small candidate pool with known facts, built through the real pipeline with fake LLMs."""
 import os
 
+os.environ["AUTH_ENABLED"] = "0"          # login is on by default; the general tests run without it (test_auth.py turns it on explicitly)
 os.environ["SEMANTIC_INDEXING"] = "0"     # tests must never call the real embedding API (set before app.config loads)
 import json
 import sqlite3

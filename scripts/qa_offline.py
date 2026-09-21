@@ -253,6 +253,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app import config  # noqa: E402
 from app.main import app  # noqa: E402
 
+config.AUTH_ENABLED = True          # importing the test helpers switched login off; this suite tests it, so switch it back on
+config.ALLOW_REGISTRATION = True
 config.ADMIN_EMAIL, config.ADMIN_PASSWORD = "admin@qa.com", "admin-password-1"
 
 

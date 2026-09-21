@@ -27,7 +27,7 @@
    "expected": "all pages read, under 3 s",
    "actual": "pages=30 chars=14538 0.03s",
    "passed": true,
-   "seconds": 0.08
+   "seconds": 0.1
   },
   {
    "scenario": "S1 Parsing and messy files",
@@ -153,7 +153,7 @@
    "expected": "treated as identical",
    "actual": "re-exported in UPPER CASE -> duplicate_ignored",
    "passed": true,
-   "seconds": 0.03
+   "seconds": 0.02
   },
   {
    "scenario": "S6 Duplicates and multi-job policy",
@@ -189,7 +189,7 @@
    "expected": "allowed; one candidate, active in both",
    "actual": "other job -> stored, candidates=1",
    "passed": true,
-   "seconds": 0.03
+   "seconds": 0.02
   },
   {
    "scenario": "S6 Duplicates and multi-job policy",
@@ -216,7 +216,7 @@
    "expected": "old active, new superseded",
    "actual": "{15: 'active', 16: 'superseded'}",
    "passed": true,
-   "seconds": 0.02
+   "seconds": 0.03
   },
   {
    "scenario": "S6 Duplicates and multi-job policy",
@@ -225,7 +225,7 @@
    "expected": "never more than one active",
    "actual": "third version -> conflict_pending, active=1",
    "passed": true,
-   "seconds": 0.03
+   "seconds": 0.04
   },
   {
    "scenario": "S6 Duplicates and multi-job policy",
@@ -243,7 +243,7 @@
    "expected": "kept as two candidates",
    "actual": "two people, same name -> candidates 12,13",
    "passed": true,
-   "seconds": 0.02
+   "seconds": 0.03
   },
   {
    "scenario": "S6 Duplicates and multi-job policy",
@@ -252,7 +252,7 @@
    "expected": "same person",
    "actual": "phone-only resume matched existing person -> conflict_pending",
    "passed": true,
-   "seconds": 0.03
+   "seconds": 0.02
   },
   {
    "scenario": "S8 API, security and load",
@@ -270,7 +270,7 @@
    "expected": "both rejected",
    "actual": "forged=401, expired=401",
    "passed": true,
-   "seconds": 0.02
+   "seconds": 0.03
   },
   {
    "scenario": "S8 API, security and load",
@@ -279,7 +279,7 @@
    "expected": "all 403",
    "actual": "recruiter on admin endpoints -> (403, 403, 403, 403)",
    "passed": true,
-   "seconds": 0.17
+   "seconds": 0.14
   },
   {
    "scenario": "S8 API, security and load",
@@ -288,7 +288,7 @@
    "expected": "locked after 5 failures, even for the right password",
    "actual": "5 bad logins {401}, then correct password -> 429",
    "passed": true,
-   "seconds": 0.47
+   "seconds": 0.44
   },
   {
    "scenario": "S8 API, security and load",
@@ -297,7 +297,7 @@
    "expected": "404, data intact",
    "actual": "injected table name -> 404, users table -> 404, candidates intact -> 200",
    "passed": true,
-   "seconds": 0.03
+   "seconds": 0.04
   },
   {
    "scenario": "S8 API, security and load",
@@ -324,16 +324,16 @@
    "expected": "all stored, consistent DB",
    "actual": "12 uploads on 6 threads in 0.4s: {'stored': 12}, ranked candidates=12",
    "passed": true,
-   "seconds": 0.55
+   "seconds": 0.51
   },
   {
    "scenario": "S8 API, security and load",
    "id": "S8-09",
    "title": "200 requests, 20 concurrent",
    "expected": "no errors, p95 under 2 s",
-   "actual": "200 requests, 20 at a time: 200 OK, median 195 ms, p95 261 ms",
+   "actual": "200 requests, 20 at a time: 200 OK, median 150 ms, p95 215 ms",
    "passed": true,
-   "seconds": 2.05
+   "seconds": 1.58
   },
   {
    "scenario": "S8 API, security and load",
@@ -342,7 +342,7 @@
    "expected": "neutralised in the CSV",
    "actual": "formula-like name is not written as a live formula",
    "passed": true,
-   "seconds": 0.12
+   "seconds": 0.1
   },
   {
    "scenario": "S8 API, security and load",
@@ -360,7 +360,7 @@
    "expected": "no file written anywhere",
    "actual": "status 200; files written outside the DB: none",
    "passed": true,
-   "seconds": 0.13
+   "seconds": 0.1
   },
   {
    "scenario": "S8 API, security and load",
@@ -378,7 +378,7 @@
    "expected": "rejected",
    "actual": "old cookie replayed after logout -> 401 (stateless tokens stay valid until they expire)",
    "passed": true,
-   "seconds": 0.19
+   "seconds": 0.16
   },
   {
    "scenario": "S8 API, security and load",
@@ -387,7 +387,7 @@
    "expected": "ignored: recruiter, no admin access",
    "actual": "self-registered with role=admin -> got recruiter; can list users? 403",
    "passed": true,
-   "seconds": 0.15
+   "seconds": 0.11
   }
  ]
 }
