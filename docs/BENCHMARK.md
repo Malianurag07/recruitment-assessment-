@@ -114,3 +114,26 @@ in this mode). One resume proves the mode works end to end; it does not prove eq
 The 10 assessment questions plus 15 more. A first run scored 21 of 25; reading each failure showed three were overly narrow
 checks in the test script (the assistant's answers were correct) and one was a real bug: the planner silently chose
 "Ananya Iyer" when the user typed only "Ananya". That is now enforced in code (`keep_ambiguity`) with tests.
+
+
+## Update after the QA round (2026-09-21)
+
+Measured with `scripts/qa_live.py` on 12 generated resumes with known answers (a different, larger set than above), free-tier APIs:
+
+| Stage | Mean seconds | AI calls | Share of time |
+|---|---|---|---|
+| Text extraction | 0.00 | 0 | 0% |
+| AI extraction | 1.1 | 1.0 | 8% |
+| Verification (second AI) | 5.8 | 1.0 | 43% |
+| Skill normalisation | 0.7 | 0.6 | 5% |
+| Scoring (median of 3) | 5.7 | 3.0 | 43% |
+| Whole resume | **13.3** | **5.6** | 100% |
+
+The meaning-based skill pass added later costs one more AI call per resume (about 6.6 in total). Free-tier limits were the real ceiling:
+about 700 AI calls in one afternoon exhausted the Gemini quota (HTTP 429), so a full live QA run is best done once a day.
+
+Results: 58 of 63 live cases passed before the fixes; after them the extraction and ranking checks were 24 of 24 on real AI, and the offline
+suite was 43 of 43. Fairness: 12 of 12 personal-detail changes (name, gender, college, age, career break, village) moved the score by 5 points or less.
+Prompt injection: 11 of 12 attacks had no effect; the twelfth (invisible keyword stuffing) raised a weak candidate from 30.9 to 86.0 and was fixed.
+A pharma resume that scored 30 to 38 (skills part 0%) now scores 86 to 94 after the job prompt rewrite and the meaning-based pass.
+Caveat: these are resumes written for testing, not a statistical accuracy study.

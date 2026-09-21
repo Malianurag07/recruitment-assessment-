@@ -22,7 +22,7 @@ querying resumes against a job. The honest question is how that slice compares.
 | **Data model** | People, applications, normalized skills, analyses, verification log, per-job scoping | Requisitions, candidates, applications, pipeline stages, scorecards, communications | Theirs covers the whole lifecycle. |
 | **Scale and deployment** | Single process, SQLite, sequential pipeline | Multi-tenant cloud, distributed, queued processing | Theirs is production-grade; ours is a prototype. |
 | **Integrations** | None | Job boards, HRIS, background checks, calendars, hundreds of connectors | Not comparable. |
-| **Security and access control** | None (no login) | Roles, single sign-on, audit logs, certifications | A real gap. |
+| **Security and access control** | Email and password login, admin and recruiter roles, a private workspace per account, hashed passwords, signed and revocable sessions, login lockout, security headers (all tested) | Roles, single sign-on, audit logs, certifications | Basic but real; still no SSO, audit log or certifications. |
 | **Compliance for AI screening** | Human-in-the-loop by design and explanations, but no bias audit, notices or opt-out | Some tools emphasise compliance and audits; approaches differ | The most important gap (see below). |
 | **Cost** | $0 | Subscription pricing | |
 
@@ -70,7 +70,7 @@ UI is built to support that (every score is decomposed and explained).
 1. **Validation at scale.** A labelled set of hundreds of resumes to measure real accuracy, including messy and multi-language ones.
 2. **OCR** for scanned resumes (the most common real-world failure).
 3. **Bias and fairness tooling:** adverse-impact monitoring, an anonymised-screening mode, candidate notice and consent, retention and deletion.
-4. **Authentication, roles and an audit log.**
+4. **Single sign-on, an audit log and security certifications** (basic login, roles and per-account privacy now exist).
 5. **Background queue and worker pool**, PostgreSQL instead of SQLite, and a paid API tier for real throughput.
 6. **Integrations** (job boards, calendars, HRIS) and pipeline stages.
 

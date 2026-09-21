@@ -111,4 +111,4 @@ Every functional requirement, documentation item and submission item in the asse
 
 1. Demo video (5-10 minutes) following the guided flow.
 2. `git init`, public GitHub repository, submission form.
-3. Optional: authentication and user management.
+3. Optional next ideas: relevance-weighted experience score, an admin "my jobs only" view, OCR for scanned resumes.

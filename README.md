@@ -13,7 +13,7 @@ SQLite, open-source libraries).
 | **Backend** | Python, FastAPI, SQLite |
 | **Frontend** | HTML, Tailwind CSS (CDN), vanilla JavaScript. No build step |
 | **AI** | Groq (`qwen3.8-27b`, `gpt-oss-120b`) and Gemini (`gemini-3.1-flash-lite`); optional local Llama via Ollama |
-| **Tests** | 214 automated tests, no API keys needed to run them |
+| **Tests** | 218 automated tests, no API keys needed to run them |
 
 ## Contents
 
@@ -255,7 +255,7 @@ shows exactly what was stored.
 Useful commands:
 
 ```bash
-python -m pytest tests -q                        # 214 tests, no API keys needed
+python -m pytest tests -q                        # 218 tests, no API keys needed
 python scripts/demo_pipeline.py                  # rebuild the database from data/sample_resumes (live AI, ~2 min)
 python scripts/match_jd.py data/job_descriptions/ai_ml_intern.txt   # add a job to the existing database
 python scripts/test_queries.py                   # 25 live chat questions
@@ -274,19 +274,21 @@ Sample data: `data/sample_resumes/` (7 real resumes shared with permission, 3 sy
 - An entry-level job description (no minimum) treats a fresher as a valid baseline (experience score 60).
 - Skill proficiency comes only from the resume's wording ("basic", "working knowledge"); unstated depth is treated as solid.
 - The score weights (50/20/15/15) and cut-offs (70/45) are judgment calls; they are constants and easy to tune.
-- Recruiters are trusted: there is no login, and one recruiter's workspace is the whole database.
+- Each account is a separate workspace: recruiters see only their own jobs, admins see all (section 3). Anyone who can reach the site can register a recruiter account unless `ALLOW_REGISTRATION=0`.
 - Free API tiers are enough for a demo-sized batch (tens of resumes), not for production volume.
 
 ## 10. Known limitations
 
 - **No OCR.** Scanned or image-only PDFs are rejected with a clear message. Legacy `.doc` is unsupported.
 - **AI judgments are not perfectly repeatable.** Median-of-3 rounding cut the average run-to-run swing from 4.2 to 1.8 points, but a rounding boundary can still flip a score by up to about 6 points. Only the AI-judged 30% of the score is affected.
-- **Exact skill matching** after aliases plus a small implication table (`IMPLIED_BY`). `PyTorch` does not earn credit for `TensorFlow`.
+- **Skill matching is word-for-word first,** then one extra AI pass matches requirements the resume states in other words, accepted only with a verbatim quote (section 5). That pass can be generous: some accepted quotes are only loosely related. Chat questions such as "who knows X?" search the skills list, not these meaning matches.
+- **The experience score counts total years in any field.** A candidate from an unrelated field who meets the minimum years still earns the full 20 points for experience, so even a complete mismatch scores about 26 rather than near 0 (the recommendation is still Reject).
+- **The job description is re-read on every upload of a new job,** and the AI's list of requirements can differ slightly between two parses of the same text (5 to 8 items measured). Within one job the list is fixed.
 - **Two-column PDFs** are extracted in block order, which is not always the visual order (the AI reads by section headings, so this rarely matters).
 - **`search_resume_text` matches literal words only.** Structured tools are preferred and used first.
 - **Free-tier rate limits.** AI calls are capped in flight (`LLM_MAX_CONCURRENCY`, default 4), fall back across models, and retry with exponential backoff; if everything still fails a resume is stored with "analysis pending" and a Retry button. Parallel uploads are therefore reliable but only 1.1-1.6x faster than sequential on free tiers (see `docs/BENCHMARK.md`).
-- **Sequential per-request pipeline** (about 10 s per resume). Uploads from the UI go one file at a time; there is no background job queue.
-- **No authentication, no multi-user roles, no audit-grade access log.**
+- **Sequential per-request pipeline** (about 13 s and 6 to 7 AI calls per resume, measured on free tiers). Uploads from the UI go one file at a time; there is no background job queue.
+- **Authentication is basic:** email and password with two roles. There is no single sign-on or OAuth, no email verification, no audit-grade access log, and the login lockout and sign-up limit are kept in memory (they reset when the server restarts).
 - **No bias audit.** Names and contact details are part of the text the AI reads. Automated screening tools can be legally regulated (see section 11); this project is a prototype and is **not** a compliant hiring system. A human must make the decision.
 - **English only; SQLite only** (single writer; fine for one recruiter, not for a large team).
 - The web page loads Tailwind and fonts from a CDN, so it needs internet access.
@@ -295,7 +297,8 @@ Sample data: `data/sample_resumes/` (7 real resumes shared with permission, 3 sy
 
 ## 11. Testing, performance and comparison with commercial tools
 
-- **214 automated tests** cover parsing (including hostile files), extraction and validation, verification, scoring, duplicates and the concurrency race, the query tools (with injection attempts), hybrid retrieval, exports (with spreadsheet-injection checks), the API, and resilience.
+- **218 automated tests** cover parsing (including hostile files), extraction and validation, verification, scoring, duplicates and the concurrency race, the query tools (with injection attempts), hybrid retrieval, exports (with spreadsheet-injection checks), the API, and resilience.
+- **Quality-assurance suites:** `scripts/qa_offline.py` (43 cases, no AI quota: messy files, duplicates, API security and load) and `scripts/qa_live.py` (63 cases on the real AI: extraction accuracy, ranking, fairness, prompt injection, chat). Every failure they found (a verifier that overwrote correct years, invisible keyword-stuffing text, missed header and link contact details, missing security headers, logout not ending sessions, and non-technical jobs scoring near 0% on skills) was fixed and is covered by a unit test. Results are in `docs/qa_results/`. Line coverage of `app/` is 92%.
 - **Measured performance and accuracy** on this project's own data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 - **How this compares with commercial recruiting software**, on architecture and efficiency, and where it falls short: [`docs/COMPARISON.md`](docs/COMPARISON.md).
 - **How the prompts are engineered** (and the failures that shaped them): [`docs/PROMPTS.md`](docs/PROMPTS.md).
@@ -341,8 +344,8 @@ app/
   routes/     upload, analysis, query
   services/   candidate_service, dedupe, skill_normalizer, read_models
 frontend/     index.html, styles.css, app.js
-scripts/      demo_pipeline, match_jd, test_queries, benchmark
-tests/        214 tests (fake LLMs; no network)
-docs/         SCORING.md, PROMPTS.md, BENCHMARK.md, COMPARISON.md
+scripts/      demo_pipeline, match_jd, test_queries, benchmark, qa_offline, qa_live, qa_common, qa_report
+tests/        218 tests (fake LLMs; no network)
+docs/         SCORING.md, PROMPTS.md, BENCHMARK.md, COMPARISON.md, qa_results/
 data/         sample_resumes/, job_descriptions/, sample job description
 ```
