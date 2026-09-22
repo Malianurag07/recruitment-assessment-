@@ -15,6 +15,8 @@ SQLite, open-source libraries).
 | **AI** | Groq (`qwen3.8-27b`, `gpt-oss-120b`) and Gemini (`gemini-3.1-flash-lite`); optional local Llama via Ollama |
 | **Tests** | 218 automated tests, no API keys needed to run them |
 
+**Demo video:** https://drive.google.com/file/d/1xGxcIh01w392BSfrpsXGqaTh-zKKk3qz/view?usp=sharing
+
 ## Contents
 
 1. [Project description and objectives](#1-project-description-and-objectives)
