@@ -54,9 +54,10 @@ and **zero cost**.
 flowchart TD
     UI["Web UI (HTML + Tailwind + JS)<br/>ranking, chat, compare, export, login, users page"] -->|JSON over HTTP + session cookie| SEC["Security layer<br/>security headers, optional login,<br/>admin / recruiter roles"]
     SEC --> API["FastAPI routes<br/>auth / users / upload / analysis + export / query"]
+    API --> P1
+    API -->|question| C1
 
     subgraph Pipeline["Resume pipeline (candidate_service.process_resume)"]
-        direction TB
         P1["1. Text extraction<br/>PyMuPDF / python-docx<br/>invisible text dropped, link targets kept"] --> P2["2. AI extraction<br/>Groq qwen3.8-27b -> validated JSON"]
         P2 --> P3["3. Double verification<br/>free code checks + Gemini second opinion<br/>(corrections need a verbatim quote)"]
         P3 --> P4["4. Skill normalisation<br/>alias table + AI for unknown skills"]
@@ -65,19 +66,19 @@ flowchart TD
         P6 --> P7[("SQLite<br/>candidates, applications, skills, scores,<br/>verification log, chat history, users")]
     end
 
-    API --> P1
-    API -->|question| Chat["Query engine"]
     subgraph ChatFlow["Chat (query_engine)"]
-        direction TB
         C1["Plan: AI picks tools as JSON"] --> C2["Execute: 12 fixed, parameterised tools<br/>(SQL, plus hybrid search: keywords + embeddings)"]
         C2 --> C3["Answer: Gemini, using ONLY tool results"]
     end
-    Chat --> C1
-    C2 <--> P7
+
+    P7 -->|read| C2
+    C3 -->|save Q&amp;A| P7
 
     LLM["AI providers<br/>Groq + Gemini (cloud)<br/>or Ollama (LLM_MODE=local)"]
-    Pipeline -.-> LLM
-    ChatFlow -.-> LLM
+    P2 -.-> LLM
+    P3 -.-> LLM
+    C1 -.-> LLM
+    C3 -.-> LLM
 ```
 
 **Key design decisions**
